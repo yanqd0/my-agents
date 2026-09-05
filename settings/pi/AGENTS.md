@@ -32,3 +32,20 @@
 | `startup.json` | `defaultProvider:deepseek`、`defaultModel:deepseek-v4-flash`、`defaultThinkingLevel:low` | 启动模型默认（当前仅 deepseek） |
 | `compaction.json` | `compaction.enabled`、`reserveTokens:100000`、`keepRecentTokens:25000` | 1M 窗口留 100K 输出 → 约 900K 触发压缩；保留近期 25K |
 | `model/deepseek.json` | deepseek-v4-pro/flash 定义 + USD cost | → models.json；价格/来源见 `model/AGENTS.md` |
+
+## 与现状文档的对应（改动必同步）
+
+本目录片段经 `install.py --target pi` deep-merge 落地到 `~/.pi/agent/settings.json` 与
+`models.json` 后，成为 **pi 实际运行配置**。已生效键的**现状 + 来源片段对照表**固化在
+[`notes/pi-config.md`](../../notes/pi-config.md)（§2），另有「尚未配置、跟随 pi 默认值」的
+速查（§3）与完整调整流程（§4）。
+
+**同步契约**：任何片段新增/删除/改值、或真实 pi 配置发生与片段相关的变更，必须同步更新：
+
+1. 上方「当前片段」表（含 `model/` 项）；
+2. `notes/pi-config.md` §2 现状表（改值 + 刷新「现状日期」）；若改动触及 §3 默认值取向或
+   片段命名规则，也一并校正；
+3. `README.md`（涉及片段/能力增减时）。
+
+**反向约束**：`notes/pi-config.md` 描述的默认值/键语义以 pi 官方 `docs/settings.md` 为权威，
+pi 升级后若键或默认值漂移，以 pi 文档为准更新片段与现状表。
