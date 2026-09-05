@@ -41,6 +41,6 @@
 | my-git-tag | 打语义化版本 tag | 迁移中 |
 | my-code-io | 基于代码生成中文技术介绍文 | 迁移中 |
 | my-image-vision | 图片预处理 + Vision API 识图 | 迁移中 |
-| my-new-agent | 项目级 agent 定义 | 待评估(0.2.0) |
+| my-new-agent | 项目级 agent 定义 | **0.1.0 不迁移**：产出 `.claude/agents` 属 Claude 专属（0.2.0 评估落点） |
 
 新增/删除/改动内容后，需同步更新本表后再提交。

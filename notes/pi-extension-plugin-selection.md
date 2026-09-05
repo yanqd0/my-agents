@@ -34,12 +34,14 @@ CC/Codex 对应、须支持安装：
 | Checkpoint | `git-checkpoint.ts` `auto-commit-on-exit.ts` `git-merge-and-resolve.ts` | git 存档/自动提交/合并 | — |
 | 后台/异步(轻) | subagent 的 chain/parallel | 真后台 jobs 官方缺，见 T2 | — |
 
-### 安装方案（待定 → issue 决策）
-三个候选，倾向 (a)/(c)：
-- (a) **收编 vendor**：把选定官方 example 拷进 my-agents `extensions/pi/`，由 `install.py --target pi`
-  分发到 `~/.pi/agent/extensions/`（多文件需 `extensions/<name>/index.ts` 形态）。可控、可复现、喂 dsh/codex。
-- (b) 直接软链 pi 包内 example：依赖 pnpm store 版本路径，**升级即漂移，不推荐**。
+### 安装方案（已决策 → (a) 收编 vendor）
+三个候选：
+- (a) **收编 vendor**（**采用**）：把选定官方 example 拷进 my-agents `extensions/pi/`，由
+  `install.py --target pi` 分发到 `~/.pi/agent/extensions/`（多文件需 `extensions/<name>/index.ts` 形态）。
+  可控、可复现、喂 dsh/codex。具体落地在扩展正式引入阶段(非 0.1.0 skills+settings 范围)进行。
+- (b) 直接软链 pi 包内 example：依赖 pnpm store 版本路径，**升级即漂移，不采用**。
 - (c) 在 my-agents 内组织成 pi 本地 package（`package.json` + `pi` 清单），`pi install /path/to/my-agents/extensions-pi`。
+  保留为候选（若官方 example 依赖较多时改用）。
 
 ## T2 — 仅第三方（初选口碑最好，落前审源码+锁版本）
 
@@ -75,7 +77,8 @@ pi 不向模型暴露 AskUserQuestion：本选型用 T1 `question.ts`/自写薄 
 
 ## 落地待办（已登记 mint）
 
-- **#9**（plan #1）：决策 §安装方案 (a)/(c) → 并入 my-agents `install.py` 设计（issue #1）。
+- **#9**（plan #1，已决策）：§安装方案选 (a) 收编 vendor；扩展正式引入(非 0.1.0 范围)时由
+  `install.py --target pi` 分发 `extensions/pi/*` 到 `~/.pi/agent/extensions/`。
 - **#10**（plan #1）：AskUserQuestion 适配层 + 依赖交互 skills 改写规则 → 写入 AGENTS.md 迁移原则。
 - **#11**（0.2.0）：T2 首选逐个审源码 + 定精确版本后，再进选型。
 - **#12**（0.2.0）：MCP/深度审查/强权限/后台 jobs 按需细化。
