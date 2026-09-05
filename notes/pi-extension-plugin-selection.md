@@ -73,9 +73,9 @@ pi 不向模型暴露 AskUserQuestion：本选型用 T1 `question.ts`/自写薄 
   （对齐 mint `references/agent/*` 思路）。
 - 无 UI/headless(`-p`/rpc)：`ctx.ui.*` 为 no-op → 交互点必须写明"退化为纯文本陈述等用户文字回答"。
 
-## 落地待办（挂 plan）
+## 落地待办（已登记 mint）
 
-- [ ] 决策 §安装方案 (a)/(c) → 并入 my-agents `install.py` 设计（issue #1）。
-- [ ] T2 首选逐个审源码 + 定精确版本后，再进选型。
-- [ ] AskUserQuestion 适配层 + 依赖交互 skills 改写规则 → 写入 AGENTS.md 迁移原则。
-- [ ] MCP/深度审查/强权限/后台 jobs 属 0.2.0 及以后范围，按需再细化。
+- **#9**（plan #1）：决策 §安装方案 (a)/(c) → 并入 my-agents `install.py` 设计（issue #1）。
+- **#10**（plan #1）：AskUserQuestion 适配层 + 依赖交互 skills 改写规则 → 写入 AGENTS.md 迁移原则。
+- **#11**（0.2.0）：T2 首选逐个审源码 + 定精确版本后，再进选型。
+- **#12**（0.2.0）：MCP/深度审查/强权限/后台 jobs 按需细化。
