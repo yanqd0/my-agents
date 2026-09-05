@@ -108,11 +108,11 @@ provider **deepseek**（`settings/pi/model/deepseek.json`）：
 | `retry.provider.maxRetries` | `0` | **保持 0**（文档明确建议；>0 会让 SDK 层吞掉超限错误致卡住） |
 | `retry.provider.maxRetryDelayMs` | `60000` | 保持 |
 
-### 3.5 资源加载（会被 #14/#15 填充，关注）
+### 3.5 资源加载
 
 | 键 | 默认 | 建议 |
 |----|------|------|
-| `packages` / `extensions` / `skills` / `prompts` / `themes` | `[]` | 当前未配：skills 走 `~/.agents/skills` 递归发现，无需在此列。`extensions` 将由 **#14 vendor 收编 + #15 安装脚本**写入 `~/.pi/agent/extensions/`（见 `notes/pi-extension-plugin-selection.md`） |
+| `packages` / `extensions` / `skills` / `prompts` / `themes` | `[]` | 当前未配：skills 走 `~/.agents/skills` 递归发现，无需在此列。`extensions` 由 `install.py` 把**已装 pi 包**白名单官方 example 软链到 `~/.pi/agent/extensions/`（不写 settings；见 `notes/pi-extension-plugin-selection.md` §(B)） |
 | `enableSkillCommands` | `true` | 保持（skills 注册为 `/skill:name`） |
 
 ### 3.6 其它（默认即可）

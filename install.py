@@ -4,13 +4,17 @@
 Multi-host source project. Currently pi is the supported target; dsh and other
 hosts (codex/opencode) are added later behind the same --target contract.
 
-For each host this project provides three kinds of installable content:
+For each host this project provides several kinds of installable content:
   - skills : 通用 Agent Skills，软链到该宿主共享的 skills 目录
               (pi 读 ~/.agents/skills，递归发现含 SKILL.md 的目录)
   - settings: settings/<host>/*.json deep-merge 到该宿主的 settings 文件
               (pi -> ~/.pi/agent/settings.json)
   - models: settings/<host>/model/*.json deep-merge 到该宿主的模型定义文件
               (pi -> ~/.pi/agent/models.json；含各模型 cost 价格)
+  - extensions (pi): T1 必要官方 example <不本仓库收编>，改由 <tools/pi-examples.sh> 定位
+              **已装 pi 包**自带的 examples/extensions，将白名单条目软链到
+              ~/.pi/agent/extensions/。扩展含完整系统权限 → 分发需确认/--yes；升级 pi 后
+              重跑即刷新（软链指向的 store 路径可能随版本/prune 漂移，重跑会 re-link）。
 
 `_` 前缀文件默认跳过安装，可用 --force 显式启用。模型定义/价格更新需 --force
 （models 数组为既有键，默认 merge 不覆盖）。
@@ -19,6 +23,7 @@ For each host this project provides three kinds of installable content:
 import argparse
 import json
 import os
+import subprocess
 import sys
 from pathlib import Path
 
@@ -26,6 +31,12 @@ HOME = Path.home()
 
 # ── per-host layout ──────────────────────────────────────────────────────
 # src 目录相对本文件；dest 为安装目标（可为 None=该 host 不装此项）
+# T1 必要官方 example 白名单：仅软链这些进 ~/.pi/agent/extensions。pi 的 examples 目录含几十个
+# 示例，全软链会让 pi 自动加载大量非必要扩展（命令/UI/工具冲突）。来源随已装 pi 版本漂移，
+# 升级 pi 后重跑 install.py 即刷新到新版本源。
+PI_T1_EXTENSIONS = ["permission-gate.ts", "plan-mode", "question.ts", "subagent", "todo.ts"]
+
+
 HOSTS = {
     "pi": {
         "name": "pi",
@@ -179,8 +190,119 @@ def _revert_settings(settings_dir: Path, dst_path: Path,
     return reverted
 
 
+# ── extensions（pi: 软链已装 pi 包官方 example 白名单，需确认） ─────────
+def _pi_examples_dir():
+    """经 tools/pi-examples.sh 定位当前(最高)已装 pi 的 examples/extensions 目录。
+    未定位成功返回 None。"""
+    sh = repo_root() / "tools" / "pi-examples.sh"
+    try:
+        out = subprocess.run(["bash", str(sh)], capture_output=True, text=True,
+                             check=True, timeout=20).stdout.strip()
+    except (subprocess.SubprocessError, OSError):
+        return None
+    p = Path(out)
+    return p if p.is_dir() else None
+
+
+def _confirm(prompt: str) -> bool:
+    try:
+        return input(f"{prompt} [y/N] ").strip().lower() in ("y", "yes")
+    except EOFError:
+        return False
+
+
+def _pending_ext_names(names: list, src_dir: Path, dst_dir: Path) -> list:
+    """列出白名单中需要 install/relink 的项（已正确指向当前源则过滤）。
+    返回 [(name, 动作)]。当前 pi 无此 example（版本差异）不列入。"""
+    pending = []
+    for name in names:
+        src, dst = src_dir / name, dst_dir / name
+        if not src.exists():
+            continue
+        if dst.is_symlink():
+            if os.readlink(dst) == str(src):
+                continue
+            pending.append((name, "relink"))
+        elif dst.exists():
+            pending.append((name, "exists(non-link 保留)"))
+        else:
+            pending.append((name, "install"))
+    return pending
+
+
+def _cleanup_broken_ext(names: list, dst_dir: Path, dry_run: bool) -> None:
+    for name in names:
+        dst = dst_dir / name
+        if dst.is_symlink() and not dst.exists():
+            print(f"{'[dry]  ' if dry_run else '  '}cleanup: {name} (broken link)")
+            if not dry_run:
+                dst.unlink()
+
+
+def _install_extensions(dry_run: bool, assume_yes: bool) -> None:
+    print("- extensions:")
+    src_dir = _pi_examples_dir()
+    if src_dir is None:
+        print("  warn   : 未定位到已装 pi 的官方 examples（tools/pi-examples.sh）→ 跳过扩展")
+        return
+    dst_dir = HOME / ".pi" / "agent" / "extensions"
+    dst_dir.mkdir(parents=True, exist_ok=True)
+
+    pending = _pending_ext_names(PI_T1_EXTENSIONS, src_dir, dst_dir)
+    if not pending:
+        print("  skip   : T1 扩展已全部指向当前 pi 包（升级 pi 后重跑即可刷新）")
+        _cleanup_broken_ext(PI_T1_EXTENSIONS, dst_dir, dry_run)
+        return
+
+    print(f"  T1 必要官方 example 将软链到 {dst_dir}:")
+    for name, act in pending:
+        print(f"    - {name}  ({act})")
+    print("  源     : 已装 pi 包自带 examples/extensions（升级 pi 后重跑即刷新；T2 第三方不默认装）")
+    if dry_run:
+        return
+    if not (assume_yes or (sys.stdin.isatty() and _confirm("  确认软链以上扩展？"))):
+        print("  取消   : 扩展未链接（headless 需显式 --yes；可先 --dry-run 预览）")
+        return
+    for name in PI_T1_EXTENSIONS:
+        src, dst = src_dir / name, dst_dir / name
+        if not src.exists():
+            print(f"  warn   : 当前 pi 无 example {name}（版本差异，跳过）")
+            continue
+        if dst.is_symlink():
+            if os.readlink(dst) == str(src):
+                print(f"  skip   : {name} (correct)")
+                continue
+            print(f"  relink : {name}")
+            dst.unlink()
+        elif dst.exists():
+            print(f"  skip   : {name} (existing non-link，保留)")
+            continue
+        else:
+            print(f"  install: {name}")
+        dst.symlink_to(src)
+    _cleanup_broken_ext(PI_T1_EXTENSIONS, dst_dir, dry_run)
+
+
+def _uninstall_extensions(dry_run: bool) -> None:
+    print("- extensions:")
+    dst_dir = HOME / ".pi" / "agent" / "extensions"
+    if not dst_dir.is_dir():
+        print("  skip   : 扩展目录不存在")
+        return
+    removed = 0
+    for name in PI_T1_EXTENSIONS:
+        dst = dst_dir / name
+        if dst.is_symlink():
+            print(f"{'[dry]  ' if dry_run else '  '}remove : {name}")
+            if not dry_run:
+                dst.unlink()
+            removed += 1
+    if not removed:
+        print("  skip   : 无 T1 扩展软链")
+
+
 # ── actions ──────────────────────────────────────────────────────────────
-def install(host: dict, dry_run: bool, force: bool) -> None:
+def install(host: dict, dry_run: bool, force: bool, assume_yes: bool) -> None:
     root = repo_root()
     print(f"[install] target={host['name']}")
     print("- skills:")
@@ -189,6 +311,8 @@ def install(host: dict, dry_run: bool, force: bool) -> None:
     _install_settings(root / host["settings_src"], host["settings_dest"], force, dry_run)
     print("- models:")
     _install_settings(root / host["model_src"], host["model_dest"], force, dry_run)
+    if host["name"] == "pi":
+        _install_extensions(dry_run, assume_yes)
 
 
 def uninstall(host: dict, dry_run: bool, force: bool) -> None:
@@ -200,6 +324,8 @@ def uninstall(host: dict, dry_run: bool, force: bool) -> None:
     _revert_settings(root / host["settings_src"], host["settings_dest"], force, dry_run)
     print("- models:")
     _revert_settings(root / host["model_src"], host["model_dest"], force, dry_run)
+    if host["name"] == "pi":
+        _uninstall_extensions(dry_run)
 
 
 def main() -> None:
@@ -209,6 +335,8 @@ def main() -> None:
     parser.add_argument("--dry-run", action="store_true", help="仅打印，不落盘")
     parser.add_argument("--force", action="store_true",
                         help="强制覆盖已有 settings 键并启用 `_` 前缀文件")
+    parser.add_argument("--yes", "-y", action="store_true",
+                        help="扩展软链免交互确认（headless 下必须）")
     parser.add_argument("action", nargs="?", default="install",
                         choices=["install", "uninstall"],
                         help="install（默认）或 uninstall")
@@ -216,7 +344,7 @@ def main() -> None:
 
     host = HOSTS[args.target]
     if args.action == "install":
-        install(host, args.dry_run, args.force)
+        install(host, args.dry_run, args.force, args.yes)
     else:
         uninstall(host, args.dry_run, args.force)
 

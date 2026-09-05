@@ -9,7 +9,7 @@
 | 档 | 定义 | 政策 |
 |---|---|---|
 | **T0** | pi 原生能力 | **不动，用默认**（不评估、不装插件覆盖） |
-| **T1** | pi 无、但**官方 extension** 有能力 | **支持安装**（安装/分发方案待定，见 §安装方案） |
+| **T1** | pi 无、但**官方 extension** 有能力 | **支持安装**（安装方案 =(B) 动态软链已装 pi，见 §安装方案） |
 | **T2** | **只有第三方插件**能支持 | **选口碑最好**（下载量 + 维护活跃为口碑代理）；落前审源码、锁版本 |
 
 备选（PK 失败项）一律保留，便于未来换用。
@@ -19,7 +19,7 @@
 Agent Skills（`~/.agents/skills` 递归发现）、AGENTS.md/CLAUDE.md 上下文、compaction、
 headless/`-p`/json/rpc、sessions/fork/clone/tree、prompt templates、themes、thinking/models/providers。
 
-## T1 — 官方 extension（已定：收编官方 example，方案待定）
+## T1 — 官方 extension（已定：官方 example，安装方案 =(B) 动态取已装 pi）
 
 官方 = pi 仓库自带 `examples/extensions/`，随版本同源维护，是唯一"官方出品"。能力与
 CC/Codex 对应、须支持安装：
@@ -34,14 +34,22 @@ CC/Codex 对应、须支持安装：
 | Checkpoint | `git-checkpoint.ts` `auto-commit-on-exit.ts` `git-merge-and-resolve.ts` | git 存档/自动提交/合并 | — |
 | 后台/异步(轻) | subagent 的 chain/parallel | 真后台 jobs 官方缺，见 T2 | — |
 
-### 安装方案（已决策 → (a) 收编 vendor）
-三个候选：
-- (a) **收编 vendor**（**采用**）：把选定官方 example 拷进 my-agents `extensions/pi/`，由
-  `install.py --target pi` 分发到 `~/.pi/agent/extensions/`（多文件需 `extensions/<name>/index.ts` 形态）。
-  可控、可复现、喂 dsh/codex。具体落地在扩展正式引入阶段(非 0.1.0 skills+settings 范围)进行。
-- (b) 直接软链 pi 包内 example：依赖 pnpm store 版本路径，**升级即漂移，不采用**。
-- (c) 在 my-agents 内组织成 pi 本地 package（`package.json` + `pi` 清单），`pi install /path/to/my-agents/extensions-pi`。
+### 安装方案（决策演进 → (B) 动态取已装 pi，软链）
+候选演进：
+- (a) **收编 vendor**（曾采用，已**重审撤销**，相关历史已从 git 清除）：把官方 example 拷进
+  my-agents `extensions/pi/` 由 install.py 分发。撤销理由：examples 是随 pi 版本**演进的移动目标**
+  （实测 0.84.4→0.85.0 收编项里 4 个新增、1 个改动）；收编=每次升级 pi 手动重 diff，易漂移；
+  且扩展**pi 专用**、无跨宿主复用价值，当初"喂 dsh/codex" 动机不成立。
+- (B) **采用**：`install.py --target pi` 安装时经 `tools/pi-examples.sh` 定位**已装 pi 包**自带的
+  `examples/extensions/`，把白名单 T1 项（plan-mode/subagent/question/permission-gate/todo）**软链**
+  到 `~/.pi/agent/extensions/`。**本仓库不存任何扩展副本**；升级 pi 后重跑 install 即刷新。
+  代价：软链指向 pnpm store 版本哈希路径，`pnpm store prune`/升级后可能失效 → 重跑 install 会
+  re-link/清理；不重跑则旧软链静默失效（已在 install 幂等里处理，勿用 store prune 常态）。
+- (c) 在 my-agents 内组织成 pi 本地 package（`package.json` + `pi` 清单），`pi install ...`。
   保留为候选（若官方 example 依赖较多时改用）。
+
+**更新节奏**：T1 项随已装 pi 发行包分发，故"升级 pi → 重跑 `install.py`（自动选最高版本 pi 源）"
+即完成更新，无需手动比对上游。白名单项若在更高版本新增/更名，install 会报"无此 example"提示。
 
 ## T2 — 仅第三方（初选口碑最好，落前审源码+锁版本）
 
@@ -77,8 +85,8 @@ pi 不向模型暴露 AskUserQuestion：本选型用 T1 `question.ts`/自写薄 
 
 ## 落地待办（已登记 mint）
 
-- **#9**（plan #1，已决策）：§安装方案选 (a) 收编 vendor；扩展正式引入(非 0.1.0 范围)时由
-  `install.py --target pi` 分发 `extensions/pi/*` 到 `~/.pi/agent/extensions/`。
+- **#9**（plan #1，曾选 (a) 收编）：**已由用户重审撤销 → (B) 动态软链已装 pi**，落地 = install.py
+  扩展步 + `tools/pi-examples.sh`；相关 vendor 副本与旧分发代码已从 git 历史清除（本 0.1.0）。
 - **#10**（plan #1）：AskUserQuestion 适配层 + 依赖交互 skills 改写规则 → 写入 AGENTS.md 迁移原则。
 - **#11**（0.2.0）：T2 首选逐个审源码 + 定精确版本后，再进选型。
 - **#12**（0.2.0）：MCP/深度审查/强权限/后台 jobs 按需细化。

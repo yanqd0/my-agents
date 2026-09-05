@@ -10,7 +10,7 @@
 
 | 文件 | 主题 / 定位 | 现状 / 关键结论 | 关联 |
 |------|------------|----------------|------|
-| `pi-extension-plugin-selection.md` | pi 扩展/插件**技术选型**：T0/T1/T2 三档政策与候选清单 | 初稿（评审中）；T1 采用「(a) 收编 vendor」；T2 落地前需审源码+锁版本 | extensions/pi/、issue #9-#12/#14/#15 |
+| `pi-extension-plugin-selection.md` | pi 扩展/插件**技术选型**：T0/T1/T2 三档政策与候选清单 | T1 采用**「(B) 动态软链已装 pi」**（曾选 (a) 收编 vendor，已重审撤销并清历史）；T2 落地前需审源码+锁版本 | tools/pi-examples.sh、install.py 扩展步、issue #9-#12 |
 | `pi-config.md` | pi 宿主**配置现状与默认值速查**：已生效键↔片段对照 + 未配置默认 | 快照 2026-09-05、pi 0.85.0；改配置须三处同步（当前片段表 + 本文 + README） | settings/pi/ |
 
 ## 反查用法

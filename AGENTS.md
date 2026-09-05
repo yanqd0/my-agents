@@ -17,6 +17,8 @@
 - `settings/<host>/` — 每宿主专属片段：顶层 `settings/pi/*.json` → 合并进
   `~/.pi/agent/settings.json`；`settings/pi/model/*.json` → 合并进
   `~/.pi/agent/models.json`（模型定义 + 价格）
+- `tools/pi-examples.sh` — 定位**已装 pi 包**自带官方 example extensions 目录（供 install.py 扩展步使用）
+- 注：pi 的 **官方 example extensions 不在本仓库收编**，由 install.py 安装时从已装 pi 包动态软链（见下）
 - `notes/` — **特殊项目文档**（给 AI/内部开发）：技术选型/设计/现状等决策记录，非交付内容，
   不写入 `README.md`。全部经 `notes/MEMORY.md` 索引（见下），新增/改动任一 notes 文件须同步更新索引
 - `notes/MEMORY.md` — **notes 内容索引（项目记忆）**：登记 notes 下每份文档的主题与定位，便于检索
@@ -33,7 +35,11 @@
   - pi → `~/.pi/agent/settings.json`；dsh → （0.2.0 调研后确定）
 - **models**：`settings/<host>/model/*.json` deep-merge 到该 host 的模型定义文件
   - pi → `~/.pi/agent/models.json`（模型定义 + cost；apiKey 不入库）；既有模型更新需 `--force`
-- 提供 install / uninstall / dry-run / `_` 前缀默认跳过等能力，语义对齐 my-claude 的
+- **extensions (pi)**：T1 必要官方 example <不收编进仓库>，经 `tools/pi-examples.sh` 定位**已装 pi 包**
+  自带 examples/extensions，把白名单项（plan-mode/subagent/question/permission-gate/todo）软链到
+  `~/.pi/agent/extensions/`（pi 自动发现）。扩展含完整系统权限 → 需 `--yes`/交互确认；**升级 pi 后
+  重跑 install.py 即刷新**到新版本源。卸载移除这些软链。
+- 提供 install / uninstall / dry-run / `--yes` / `_` 前缀默认跳过等能力，语义对齐 my-claude 的
   `install.py`，但去掉 Claude Code 专属的 commands/hooks/agents/mcp 部分（pi 无对应结构）。
 
 ## 迁移原则（来自 my-claude 内容时）
@@ -50,9 +56,9 @@
 4. **针对 pi 重写点**：识别宿主（不再需要 Claude 的多宿主表）→ 删除；`references/agent/*`
    （claude/codex/opencode/dsh）不迁移；交互（如需）换成 pi 能力或纯文本澄清；
    版本/提交/skill 创建类流程泛化到「当前宿主」，不写死某一宿主命令。
-5. **文档同步**：目录/内容增删改后同步对应文档——涉及**交付内容**（skills/settings/extensions）→
+5. **文档同步**：目录/内容增删改后同步对应文档——涉及**交付内容**（skills/settings）→
    更新给人看的 `README.md`；涉及 AI/内部内容（notes 新增/改动）→ 更新 `notes/MEMORY.md` 索引。
-   一次 commit。
+   一次 commit。（pi 官方 example 扩展不经本仓库、由 install.py 从已装 pi 包动态软链，见安装机制。）
 6. **反问(AskUserQuestion)跨宿主适配**：宿主不一定把反问暴露成模型 tool（pi 需装
    `question`/`ask_user_question` 这类 extension 才有）。凡依赖交互的 skill：
    - frontmatter `allowed-tools` 的宿主问询 tool 名，按目标宿主改写（pi=`question`/

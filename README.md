@@ -26,6 +26,13 @@
 
 模型定义/价格更新需 `--force`（模型 `models` 数组为既有键，默认不覆盖）。
 
+### pi 扩展
+
+pi 的**必要官方扩展**（plan-mode / subagent / question / permission-gate / todo）**不在本仓库收编**，
+而是 install 时从**已装 pi 包**自带 examples 动态软链到 `~/.pi/agent/extensions/`。因扩展拥有完整
+系统权限，分发默认需确认（交互 y/N；headless 用 `--yes`，或先 `--dry-run` 预览）。T2 第三方插件
+（0.2.0）仅提示、不默认装。**升级 pi 后重跑 `./install.py` 即可刷新**到新版本源的扩展。
+
 ## 内置 Skills
 
 | Skill | 用途 |
