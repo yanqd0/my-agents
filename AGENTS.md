@@ -72,3 +72,21 @@
 本项目 issue/计划/里程碑用 mint 管理（见 `~/.agents/skills/mint`）。跨宿主需求、计划以
 `0.1.0` / `0.2.0` 里程碑组织；每个安装目标、每类内容（skills/settings/installer）拆独立
 issue 跟踪。
+
+### 宿主作用域标签（新 issue 必打）
+
+每个 issue 都要打且只打一个「宿主作用域」标签，表达该内容属于哪个宿主；追加其它标签时
+总标签数仍 ≤5：
+
+| 标签 | 含义 | 适用示例 |
+|---|---|---|
+| `pi` | 仅 pi 用 | settings/pi、pi 的 extension/plugin 适配与安装、pi 机制调研 |
+| `dsh` | 仅 dsh 用 | dsh 调研、`install.py --target dsh`、dsh 设置/插件 |
+| `shared` | 跨宿主通用 | 通用 Agent Skills（`skills/`，走 `~/.agents`）、多目标 `install.py`、跨宿主原则/决策 |
+
+判定：能下沉到 `~/.agents`/Agent Skills 供多宿主复用的 → `shared`；锁死某宿主结构/位置的 →
+该宿主标签（`pi`/`dsh`；未来 `codex`/`opencode` 同理新增）。范围跨 pi 与 shared 的，按
+「是否仅该宿主能消费」判——纯宿主产物打宿主标签，仅设计/原则层面可复用打 `shared`。
+
+登记时给宿主标签附上简短 description（`name:desc` 形式）便于筛选，例如
+`pi: 仅 pi 宿主使用的扩展/设置`。
