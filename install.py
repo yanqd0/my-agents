@@ -4,13 +4,16 @@
 Multi-host source project. Currently pi is the supported target; dsh and other
 hosts (codex/opencode) are added later behind the same --target contract.
 
-For each host this project provides two kinds of installable content:
+For each host this project provides three kinds of installable content:
   - skills : 通用 Agent Skills，软链到该宿主共享的 skills 目录
               (pi 读 ~/.agents/skills，递归发现含 SKILL.md 的目录)
   - settings: settings/<host>/*.json deep-merge 到该宿主的 settings 文件
               (pi -> ~/.pi/agent/settings.json)
+  - models: settings/<host>/model/*.json deep-merge 到该宿主的模型定义文件
+              (pi -> ~/.pi/agent/models.json；含各模型 cost 价格)
 
-`_` 前缀的 settings 文件默认跳过安装，可用 --force 显式启用。
+`_` 前缀文件默认跳过安装，可用 --force 显式启用。模型定义/价格更新需 --force
+（models 数组为既有键，默认 merge 不覆盖）。
 """
 
 import argparse
@@ -32,6 +35,9 @@ HOSTS = {
         # settings: deep-merge settings/pi/*.json -> settings file
         "settings_src": "settings/pi",
         "settings_dest": HOME / ".pi" / "agent" / "settings.json",
+        # models: deep-merge settings/pi/model/*.json -> model definitions file
+        "model_src": "settings/pi/model",
+        "model_dest": HOME / ".pi" / "agent" / "models.json",
     },
     # dsh/codex/opencode: 0.2.0+ 在此补宿主布局
 }
@@ -181,6 +187,8 @@ def install(host: dict, dry_run: bool, force: bool) -> None:
     _symlink_items(root / host["skills_src"], host["skills_dest"], dry_run)
     print("- settings:")
     _install_settings(root / host["settings_src"], host["settings_dest"], force, dry_run)
+    print("- models:")
+    _install_settings(root / host["model_src"], host["model_dest"], force, dry_run)
 
 
 def uninstall(host: dict, dry_run: bool, force: bool) -> None:
@@ -190,6 +198,8 @@ def uninstall(host: dict, dry_run: bool, force: bool) -> None:
     _unlink_items(root / host["skills_src"], host["skills_dest"], dry_run)
     print("- settings:")
     _revert_settings(root / host["settings_src"], host["settings_dest"], force, dry_run)
+    print("- models:")
+    _revert_settings(root / host["model_src"], host["model_dest"], force, dry_run)
 
 
 def main() -> None:

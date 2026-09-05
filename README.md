@@ -9,7 +9,8 @@
 | 目录 | 内容 | 安装去向 |
 |------|------|----------|
 | `skills/` | 通用 Agent Skills（`SKILL.md` + `references/`），按 Agent Skills 标准组织 | `~/.agents/skills/`（软链） |
-| `settings/pi/` | pi 设置片段（`.json`），deep-merge 到宿主 settings | `~/.pi/agent/settings.json` |
+| `settings/pi/` | pi 设置片段（顶层 `.json`），deep-merge 到宿主 settings | `~/.pi/agent/settings.json` |
+| `settings/pi/model/` | pi 模型定义 + 价格片段（`.json`），deep-merge 到模型定义文件 | `~/.pi/agent/models.json` |
 | `install.py` | 多目标安装器（`--target pi`，dsh 待补） | — |
 | `notes/` | 技术选型/设计记录 | — |
 
@@ -29,6 +30,7 @@
 ```
 
 `settings/*/_xxx.json` 这类 `_` 前缀片段默认跳过，用 `--force` 显式安装。
+模型定义/价格更新需 `./install.py --force`（`models` 数组为既有键，默认不覆盖）。
 
 ## Skills（0.1.0，pi 首版迁移中）
 

@@ -14,8 +14,9 @@
 - `install.py` — 多目标安装器：`--target pi|dsh`，负责软链 skills、deep-merge settings 等
 - `skills/<name>/` — **通用** skill 源（含 `SKILL.md` + 可选 `references/`/`scripts/`），
   统一按 Agent Skills 规范组织，作为 pi / dsh / codex 共享的 `~/.agents/skills` 来源
-- `settings/<host>/` — 每宿主专属 settings 片段（如 `settings/pi/*.json` → 合并进
-  `~/.pi/agent/settings.json`）
+- `settings/<host>/` — 每宿主专属片段：顶层 `settings/pi/*.json` → 合并进
+  `~/.pi/agent/settings.json`；`settings/pi/model/*.json` → 合并进
+  `~/.pi/agent/models.json`（模型定义 + 价格）
 - `README.md` — 对外说明（新增/删除/改名/功能变更后同步更新）
 
 ## 安装机制（install.py）
@@ -26,6 +27,8 @@
   - 目标 skills 目录：`~/.agents/skills/`
 - **settings**：`settings/<host>/*.json` deep-merge 到该 host 的 settings 文件
   - pi → `~/.pi/agent/settings.json`；dsh → （0.2.0 调研后确定）
+- **models**：`settings/<host>/model/*.json` deep-merge 到该 host 的模型定义文件
+  - pi → `~/.pi/agent/models.json`（模型定义 + cost；apiKey 不入库）；既有模型更新需 `--force`
 - 提供 install / uninstall / dry-run / `_` 前缀默认跳过等能力，语义对齐 my-claude 的
   `install.py`，但去掉 Claude Code 专属的 commands/hooks/agents/mcp 部分（pi 无对应结构）。
 
