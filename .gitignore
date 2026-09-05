@@ -1,0 +1,15 @@
+# Python
+__pycache__/
+*.py[cod]
+*.egg-info/
+
+# Editor / OS
+.vscode/*
+!.vscode/settings.json
+.idea/
+.DS_Store
+*~
+Session.vim
+
+# Project-local runtime (if any)
+*.swp
