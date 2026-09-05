@@ -45,6 +45,15 @@
    版本/提交/skill 创建类流程泛化到「当前宿主」，不写死某一宿主命令。
 5. **README 同步**：任何目录增删改后，先更新本项目 `README.md` 相关表格/说明，再提交，
    合并为一次 commit。
+6. **反问(AskUserQuestion)跨宿主适配**：宿主不一定把反问暴露成模型 tool（pi 需装
+   `question`/`ask_user_question` 这类 extension 才有）。凡依赖交互的 skill：
+   - frontmatter `allowed-tools` 的宿主问询 tool 名，按目标宿主改写（pi=`question`/
+     `ask_user_question`，且要求该 extension 已装）；不写死某宿主独有 tool。
+   - skill 正文把交互点写成**统一动作名**（如"反问 ask 用户二选一…"），由各宿主 adapter
+     层映射到本宿主 tool；正文不依赖某一宿主 UI 原语。
+   - 无 UI/headless（pi `-p`/rpc 等）下问询原语为 no-op：交互点必须写明"退化为纯文本
+     陈述等用户文字回答"，避免卡死。
+   - 实现参考：`notes/pi-extension-plugin-selection.md` 的「反问的跨宿主适配」。
 
 ## 路线图
 
