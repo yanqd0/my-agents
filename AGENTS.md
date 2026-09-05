@@ -17,7 +17,11 @@
 - `settings/<host>/` — 每宿主专属片段：顶层 `settings/pi/*.json` → 合并进
   `~/.pi/agent/settings.json`；`settings/pi/model/*.json` → 合并进
   `~/.pi/agent/models.json`（模型定义 + 价格）
-- `README.md` — 对外说明（新增/删除/改名/功能变更后同步更新）
+- `notes/` — **特殊项目文档**（给 AI/内部开发）：技术选型/设计/现状等决策记录，非交付内容，
+  不写入 `README.md`。全部经 `notes/MEMORY.md` 索引（见下），新增/改动任一 notes 文件须同步更新索引
+- `notes/MEMORY.md` — **notes 内容索引（项目记忆）**：登记 notes 下每份文档的主题与定位，便于检索
+- `README.md` — **给人看的**对外说明（面向用户，不介绍 AGENTS.md/notes 等 AI 内部内容；
+  未来若需人看的深文档再另建 `docs/`）
 
 ## 安装机制（install.py）
 
@@ -46,8 +50,9 @@
 4. **针对 pi 重写点**：识别宿主（不再需要 Claude 的多宿主表）→ 删除；`references/agent/*`
    （claude/codex/opencode/dsh）不迁移；交互（如需）换成 pi 能力或纯文本澄清；
    版本/提交/skill 创建类流程泛化到「当前宿主」，不写死某一宿主命令。
-5. **README 同步**：任何目录增删改后，先更新本项目 `README.md` 相关表格/说明，再提交，
-   合并为一次 commit。
+5. **文档同步**：目录/内容增删改后同步对应文档——涉及**交付内容**（skills/settings/extensions）→
+   更新给人看的 `README.md`；涉及 AI/内部内容（notes 新增/改动）→ 更新 `notes/MEMORY.md` 索引。
+   一次 commit。
 6. **反问(AskUserQuestion)跨宿主适配**：宿主不一定把反问暴露成模型 tool（pi 需装
    `question`/`ask_user_question` 这类 extension 才有）。凡依赖交互的 skill：
    - frontmatter `allowed-tools` 的宿主问询 tool 名，按目标宿主改写（pi=`question`/
