@@ -57,10 +57,11 @@ provider **deepseek**（`settings/pi/model/deepseek.json`）：
 | `baseUrl` | `https://api.deepseek.com` |
 | `api` | `openai-completions` |
 | `apiKey` | 本地**手动补**（片段不含；deep-merge 不覆盖，安全） |
-| 模型 | `deepseek-v4-pro`、`deepseek-v4-flash`，各含 `contextWindow:1000000`、`maxTokens:384000`、`input:["text"]`、`reasoning:true`、`cost`（USD/百万 tokens，空闲档）、`compat`（`requiresReasoningContentOnAssistantMessages`、`thinkingFormat:"deepseek"`、`reasoningEffortMap`） |
+| 模型 | `deepseek-v4-pro`、`deepseek-v4-flash`，各含 `contextWindow:1000000`、`maxTokens:384000`、`input:["text"]`、`reasoning:true`、`cost`（元/百万 tokens，空闲档）、`compat`（`requiresReasoningContentOnAssistantMessages`、`thinkingFormat:"deepseek"`、`reasoningEffortMap`） |
 
-价格与汇率详见 `settings/pi/model/AGENTS.md`（DeepSeek 官方按百万 tokens、命中/未命中/
-输出 + 空闲/高峰两档；本仓库按空闲档最低价 × 汇率 1 元≈0.1489 USD 折算）。
+价格源见 `settings/pi/model/AGENTS.md`（DeepSeek 官方按百万 tokens、命中/未命中/输出 +
+空闲/高峰两档；直接录**空闲档人民币原值**，不做 USD 折算——pi 的 `cost` 为无币种数值，
+仅算术累加并以 `$` 前缀显示，填入的元/百万token 原值让 TUI 花费数字直接等于人民币）。
 
 ### 2.3 auth / trust
 
