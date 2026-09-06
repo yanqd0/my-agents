@@ -25,14 +25,18 @@
 ./install.py --revert             # 卸载
 
 # 其它宿主
-./install.py --target dsh      # dsh：装 skills 到 ~/.agents/skills（dsh 自动发现）
+./install.py --target dsh              # dsh：装 skills 到 ~/.agents/skills + web profile 插件
+./install.py --target dsh --update     # 重复执行：补装缺失插件，并把已装插件升到上游最新
 ```
 
-dsh 的 `--target dsh` **装 skills 到 `~/.agents/skills`**（与 pi 共用；dsh 自动发现），并支持
-**插件管理框架**：可把插件经 `dsh plugin` 装入指定 dsh profile（web/headless/…）；清单
-`DSH_PLUGINS_BY_PROFILE` 目前为空、仅框架（有真实插件再补）。dsh 的模型/cost 由 provider
-插件管理、设置是个人 `~/.dsh/settings.yaml`，无 pi 式 `settings/models` 片段可合并，故 dsh
-不装 settings/models/extensions（机制见 `notes/dsh/skills-settings-loading.md`）。
+dsh 的 `--target dsh` **装 skills 到 `~/.agents/skills`**（与 pi 共用；dsh 自动发现），并按
+`install.py` 中 `DSH_PLUGINS_BY_PROFILE` 的清单把 **dsh 第三方插件**经 `dsh plugin --profile web
+add` 装入 **web profile**（当前 4 个：dshmarket / dsh-whale-widget / graph-memory /
+dsh-calculator）。缺装项每次重跑自动补装（幂等）；已装项重跑时做**更新检查**（registry 与
+GitHub HEAD 版本对比），发现新版本默认仅报告，加 `--update` 才实际升级；`--revert` 一并卸载。
+评估与逐插件说明见 `notes/dsh/plugin-selection-web.md`。dsh 的模型/cost 由 provider 插件管理、
+设置是个人 `~/.dsh/settings.yaml`，无 pi 式 `settings/models` 片段可合并，故 dsh 不装
+settings/models/extensions（机制见 `notes/dsh/skills-settings-loading.md`）。
 
 模型定义/价格更新需 `--force`（模型 `models` 数组为既有键，默认不覆盖）。
 

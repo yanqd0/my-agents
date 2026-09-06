@@ -76,9 +76,13 @@ dsh 的「插件」是 cordis/npm 包，靠 profile 装配生效，与 skills（
   init（web/headless 有内置模板；自定义名 init 为 `[dsh-base]`），转发 pnpm，成功后把声明
   `dsh.bundle` 的依赖**自动并入**该 profile `dsh.profile.bundles`；`remove` 则移出。纯库
   （无 `dsh.bundle`）只作依赖、告警不入层。
-- **单一真源（目前为空，仅框架）**：install.py 的 `DSH_PLUGINS_BY_PROFILE`（dict：
-  `profile -> [bare npm 包名…]`，key 任意，如 web/headless/tui/自定义名）。沿先例
-  `PI_T1_EXTENSIONS` 放代码常量；空清单不落地，有真实插件再补。
+- **单一真源（已实装，见 install.py）**：install.py 的 `DSH_PLUGINS_BY_PROFILE`（dict：
+  `profile -> [(声明 npm 名, pnpm spec), …]`，key 任意，如 web/headless/tui/自定义名）。
+  web 现含 4 个第三方插件（dshmarket / dsh-whale-widget / graph-memory / dsh-calculator）。
+  重复执行 = 缺装项 add + 已装项**更新检查**：registry spec 查 `pnpm view`、github spec 查
+  GitHub HEAD 版本，默认只报告、`--update` 才升级（registry 走 `pnpm update --latest`、
+  github 走 `pnpm update`）；`--revert` 对应 remove。逐插件选择与评估、allowBuilds 等
+  注意事项见 `notes/dsh/plugin-selection-web.md`。
 - **幂等 / 回滚**：add 前读该 profile `package.json.dependencies`，已在 → skip；revert =
   `remove`（不在则 skip）。缺 `dsh`/`pnpm` 在 PATH → 告警跳过。
 - **注意事项**：

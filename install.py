@@ -13,7 +13,10 @@ For each host this project provides several kinds of installable content:
               (pi -> ~/.pi/agent/models.json，含各模型 cost 价格；dsh 的模型/cost 由
               provider 插件管理，无 pi models.json 对应物 → 不装)
   - plugins (dsh): 按 DSH_PLUGINS_BY_PROFILE 把插件装进指定 dsh profile，经
-              `dsh plugin --profile <p> add/remove`（幂等、revert=remove）。当前为空→仅框架。
+              `dsh plugin --profile <p> add/remove` 安装/卸载。已装项在每次重跑时做
+              **更新检查**（npm registry 版本对比 / GitHub HEAD 版本对比），发现新版本
+              默认仅报告，加 `--update` 才实际升级（registry 走 `pnpm update --latest`、
+              github spec 走 `pnpm update`）。缺装项始终 add，故重跑幂等且可检更新。
   - extensions (pi): T1 必要官方 example <不本仓库收编>，改由 <tools/pi-examples.sh> 定位
               **已装 pi 包**自带的 examples/extensions，将白名单条目软链到
               ~/.pi/agent/extensions/。扩展含完整系统权限 → 分发需确认/--yes；升级 pi 后
@@ -29,9 +32,11 @@ For each host this project provides several kinds of installable content:
 import argparse
 import json
 import os
+import re
 import shutil
 import subprocess
 import sys
+import urllib.request
 from pathlib import Path
 
 HOME = Path.home()
@@ -76,15 +81,29 @@ HOSTS = {
 }
 
 
-# ── dsh plugins（framework-only 目前为空） ────────────────────────────────
+# ── dsh plugins（web profile 第三方插件清单） ─────────────────────────────
 # dsh 的「插件」是 cordis/npm 包，需经 dsh 官方封装 `dsh plugin --profile <p>
-# <pnpm add/remove>` 装进某个 profile（web/headless/tui/自定义名）。本清单是
-# 单一真源：dict: profile -> [bare npm 包名, ...]。目前为空 → 只提供框架、不实装。
-# 待有真实插件时在此补，如：
-#   DSH_PLUGINS_BY_PROFILE = {"web": ["@scope/some-plugin"], "headless": []}
-# 进阶（link:/相对路径 spec、原生模块需在 profile pnpm-workspace.yaml 的
-# allowBuilds 放行等）暂不实现，仅留此口。
-DSH_PLUGINS_BY_PROFILE = {}
+# <pnpm add/remove/update>` 装进某个 profile（web/headless/tui/自定义名）。本清单是
+# 单一真源：dict: profile -> [(声明名, pnpm spec), ...]。
+#   - 声明名 = 装进 profile package.json 的依赖键（= 插件包 package.json 的 name；
+#     github spec 装完后 pnpm 仍以该名记依赖），用于幂等/回滚判定与更新报告。
+#   - spec = 传给 `dsh plugin … add` 的原样 spec：registry 名走 npm（国内镜像友好、
+#     更新检查走 registry）；GitHub 专发（作者未发 npm / npm 包缺 dsh.bundle）用
+#     `github:owner/repo`（装 repo 默认分支 HEAD，需仓库自带构建产物或 prepare 脚本；
+#     更新检查走 GitHub API 的 HEAD 版本）。
+# 更新语义：registry spec → pnpm view 对比最新；github spec → GitHub HEAD package.json
+# 版本对比。重复执行 install.py 只报告；`--update` 才升级。
+# 注意：graph-memory 的依赖含原生模块（@photostructure/sqlite），首次 add 若被 pnpm
+# 阻断构建脚本，需在 profile pnpm-workspace.yaml 的 allowBuilds 放行后重跑（dsh 会在
+# 失败信息中提示 exact key）。目标若是正运行的 GUI profile（web），建议非活跃时执行。
+DSH_PLUGINS_BY_PROFILE = {
+    "web": [
+        ("dshmarket", "dshmarket"),                            # dsh-market/dsh-market：设置内插件市场（浏览/一键装/更新/备份）
+        ("dsh-whale-widget", "dsh-whale-widget"),              # MeteorNOX/DeepSeek-Balance-Whale-Widget：余额鲸鱼挂件（npm 已发）
+        ("graph-memory", "github:adoresever/graph-memory"),    # adoresever/graph-memory：知识图谱记忆（dsh 支持仅 GitHub main，npm 未发）
+        ("dsh-calculator", "github:bobcat848/dsh-calculator"), # bobcat848/dsh-calculator：DeepSeek 费用/余额右上角卡片（无 npm 发布）
+    ],
+}
 
 
 def repo_root() -> Path:
@@ -375,7 +394,7 @@ def _uninstall_extensions(dry_run: bool) -> None:
         print("  skip   : 无 T1 扩展软链")
 
 
-# ── dsh plugins（经 `dsh plugin` 封装，框架；清单默认空） ────────────────
+# ── dsh plugins（经 `dsh plugin` 封装；清单见 DSH_PLUGINS_BY_PROFILE） ───
 def _dsh_home() -> Path:
     """dsh harness 配置根：$DSH_HOME 或 ~/.dsh。"""
     return Path(os.environ.get("DSH_HOME") or HOME / ".dsh")
@@ -390,11 +409,76 @@ def _dsh_profile_deps(profile: str) -> set:
         return set()
 
 
-def _run_dsh_plugin(profile: str, action: str, name: str, dry_run: bool) -> None:
-    """执行 `dsh plugin --profile <p> <action> <name>`（add/remove）。"""
-    cmd = ["dsh", "plugin", "--profile", profile, action, name]
+def _spec_is_registry(spec: str) -> bool:
+    """registry 名（裸包名）vs git/path/url spec 判定。registry 走 npm 源更新检查。"""
+    return not spec.startswith(("github:", "git+", "https:", "http:", "file:", "link:", "."))
+
+
+def _spec_repo(spec: str) -> str | None:
+    """从 github:owner/repo spec 提取 owner/repo；非 github spec 返回 None。"""
+    if spec.startswith("github:"):
+        return spec[len("github:"):].split("#")[0]
+    return None
+
+
+def _installed_version(profile: str, name: str) -> str | None:
+    """读某 profile 内已装插件包的实际版本（nodeLinker hoisted → profile/node_modules）。"""
+    pkg = _dsh_home() / "profiles" / profile / "node_modules" / name / "package.json"
+    try:
+        return json.loads(pkg.read_text()).get("version")
+    except (OSError, json.JSONDecodeError):
+        return None
+
+
+def _registry_latest(name: str) -> str | None:
+    """registry 最新版本：`pnpm view <name> version`（pnpm 自管 store，不依赖 npm cache）。"""
+    try:
+        proc = subprocess.run(["pnpm", "view", name, "version"],
+                              capture_output=True, text=True, timeout=30)
+        if proc.returncode != 0:
+            return None
+        return proc.stdout.strip().splitlines()[-1] if proc.stdout.strip() else None
+    except (OSError, subprocess.SubprocessError):
+        return None
+
+
+def _github_head_version(repo: str) -> str | None:
+    """GitHub 默认分支 HEAD 的 package.json version（github spec 更新检查用）。
+
+    raw.githubusercontent 在国内网络常被墙/超时，故走 api.github.com（contents raw）。
+    """
+    try:
+        def get(url: str, accept_raw: bool) -> str:
+            req = urllib.request.Request(url, headers={
+                "User-Agent": "my-agents-install",
+                "Accept": "application/vnd.github.raw" if accept_raw
+                          else "application/vnd.github+json",
+            })
+            with urllib.request.urlopen(req, timeout=15) as resp:
+                return resp.read().decode("utf-8")
+
+        meta = json.loads(get(f"https://api.github.com/repos/{repo}", False))
+        branch = meta.get("default_branch")
+        if not branch:
+            return None
+        return json.loads(get(
+            f"https://api.github.com/repos/{repo}/contents/package.json?ref={branch}",
+            True)).get("version")
+    except Exception:
+        return None
+
+
+def _version_key(version: str) -> tuple:
+    """粗粒度版本序键：取第一个连字符/加号前的数字段（如 1.6.0-beta.14 -> (1,6,0)）。"""
+    nums = re.findall(r"\d+", (version or "").split("-")[0].split("+")[0])
+    return tuple(int(n) for n in nums) or (0,)
+
+
+def _run_dsh_plugin(profile: str, args: list, dry_run: bool) -> None:
+    """执行 `dsh plugin --profile <p> <args…>`（add/remove/update 等，原样转发 pnpm）。"""
+    cmd = ["dsh", "plugin", "--profile", profile] + args
     label = " ".join(cmd)
-    print(f"{'[dry]  ' if dry_run else '  '}{action} dsh-plugin {name} (profile={profile})")
+    print(f"{'[dry]  ' if dry_run else '  '}dsh-plugin {profile} {' '.join(args)}")
     if dry_run:
         return
     try:
@@ -408,41 +492,86 @@ def _run_dsh_plugin(profile: str, action: str, name: str, dry_run: bool) -> None
         print(f"  error : {label} 退出码 {proc.returncode}: {proc.stderr.strip()}")
 
 
-def _dsh_plugins(dry_run: bool) -> None:
-    """dsh 目标：按 DSH_PLUGINS_BY_PROFILE 把插件装进对应 profile（空清单则跳过）。"""
+def _dsh_plugin_available(profile: str, name: str, spec: str) -> str | None:
+    """某插件「上游最新可装版本」：registry spec 查 npm；github spec 查 GitHub HEAD。"""
+    if _spec_is_registry(spec):
+        return _registry_latest(name)
+    repo = _spec_repo(spec)
+    return _github_head_version(repo) if repo else None
+
+
+def _update_dsh_plugin(profile: str, name: str, spec: str, dry_run: bool) -> None:
+    """把已装插件升到上游最新。registry → pnpm update --latest；github → pnpm update。"""
+    if _spec_is_registry(spec):
+        _run_dsh_plugin(profile, ["update", "--latest", name], dry_run)
+    else:
+        _run_dsh_plugin(profile, ["update", name], dry_run)
+
+
+def _dsh_plugins(dry_run: bool, update: bool) -> int:
+    """dsh 目标：按 DSH_PLUGINS_BY_PROFILE 装齐插件并做更新检查。
+
+    缺装项 → add（幂等）；已装项 → 对比上游版本：可更新时默认只报告，`update=True`
+    时执行升级。返回「存在更新」计数（含已升级），供概要提示。
+    """
     print("- plugins:")
     if not DSH_PLUGINS_BY_PROFILE:
-        print("  skip   : 未声明 dsh 插件（DSH_PLUGINS_BY_PROFILE 为空，仅框架）")
-        return
+        print("  skip   : 未声明 dsh 插件（DSH_PLUGINS_BY_PROFILE 为空）")
+        return 0
     if shutil.which("dsh") is None or shutil.which("pnpm") is None:
         print("  warn   : 需要 dsh 与 pnpm 在 PATH（dsh 用于 profile 插件管理）")
-        return
-    for profile, names in sorted(DSH_PLUGINS_BY_PROFILE.items()):
+        return 0
+    outdated = 0
+    for profile, entries in sorted(DSH_PLUGINS_BY_PROFILE.items()):
         installed = _dsh_profile_deps(profile)
-        for name in names:
-            if name in installed:
-                print(f"  skip   : {name} (profile={profile} 已装)")
+        for name, spec in entries:
+            if name not in installed:
+                _run_dsh_plugin(profile, ["add", spec], dry_run)
                 continue
-            _run_dsh_plugin(profile, "add", name, dry_run)
+            print(f"  skip   : {name} (profile={profile} 已装)")
+            installed_ver = _installed_version(profile, name)
+            if installed_ver is None:
+                continue
+            available = _dsh_plugin_available(profile, name, spec)
+            if available is None:
+                print(f"  warn   : {name} 版本核对不可达（registry/GitHub？），已装 {installed_ver}")
+                continue
+            if _version_key(available) > _version_key(installed_ver):
+                outdated += 1
+                verb = "upgrade" if (update and not dry_run) else "update-avail"
+                print(f"  {verb} : {name} {installed_ver} -> {available} "
+                      f"(spec={spec}{', dry-run' if dry_run and update else ''})")
+                if update and not dry_run:
+                    _update_dsh_plugin(profile, name, spec, dry_run)
+    if outdated:
+        if update and dry_run:
+            how = "（--update + --dry-run：仅预览，未实际升级）"
+        elif update:
+            how = "（已按 --update 升级）"
+        else:
+            how = "（重跑加 --update 升级）"
+        print(f"  note   : {outdated} 个插件有可用更新{how}")
+    return outdated
 
 
 def _uninstall_dsh_plugins(dry_run: bool) -> None:
     """dsh 目标：卸载 DSH_PLUGINS_BY_PROFILE 里的插件（remove）。"""
     print("- plugins:")
     if not DSH_PLUGINS_BY_PROFILE:
-        print("  skip   : 未声明 dsh 插件（DSH_PLUGINS_BY_PROFILE 为空，仅框架）")
+        print("  skip   : 未声明 dsh 插件（DSH_PLUGINS_BY_PROFILE 为空）")
         return
-    for profile, names in sorted(DSH_PLUGINS_BY_PROFILE.items()):
+    for profile, entries in sorted(DSH_PLUGINS_BY_PROFILE.items()):
         installed = _dsh_profile_deps(profile)
-        for name in names:
+        for name, _spec in entries:
             if name not in installed:
                 print(f"  skip   : {name} (profile={profile} 未装)")
                 continue
-            _run_dsh_plugin(profile, "remove", name, dry_run)
+            _run_dsh_plugin(profile, ["remove", name], dry_run)
 
 
 # ── actions ──────────────────────────────────────────────────────────────
-def install(host: dict, dry_run: bool, force: bool, assume_yes: bool) -> None:
+def install(host: dict, dry_run: bool, force: bool, assume_yes: bool,
+            update_plugins: bool = False) -> None:
     root = repo_root()
     print(f"[install] target={host['name']}")
     print("- skills:")
@@ -464,7 +593,7 @@ def install(host: dict, dry_run: bool, force: bool, assume_yes: bool) -> None:
     if host["name"] == "pi":
         _install_extensions(dry_run, assume_yes)
     elif host["name"] == "dsh":
-        _dsh_plugins(dry_run)
+        _dsh_plugins(dry_run, update_plugins)
 
 
 def uninstall(host: dict, dry_run: bool, force: bool) -> None:
@@ -499,15 +628,17 @@ def main() -> None:
                         help="强制覆盖已有 settings 键并启用 `_` 前缀文件")
     parser.add_argument("--yes", "-y", action="store_true",
                         help="扩展软链免交互确认（headless 下必须）")
+    parser.add_argument("--update", action="store_true",
+                        help="dsh：把已装插件升级到上游最新（缺省只检查并报告可用更新）")
     parser.add_argument("--revert", action="store_true",
-                        help="卸载：移除本项目装入的 skills/settings/models/extensions")
+                        help="卸载：移除本项目装入的 skills/settings/models/extensions/插件")
     args = parser.parse_args()
 
     host = HOSTS[args.target]
     if args.revert:
         uninstall(host, args.dry_run, args.force)
     else:
-        install(host, args.dry_run, args.force, args.yes)
+        install(host, args.dry_run, args.force, args.yes, args.update)
 
 
 if __name__ == "__main__":
