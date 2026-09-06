@@ -1,0 +1,3 @@
+[submodule "vendor/my-claude"]
+	path = vendor/my-claude
+	url = ../my-claude
