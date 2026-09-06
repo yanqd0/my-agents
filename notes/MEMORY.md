@@ -15,6 +15,7 @@
 | `pi-config.md` | pi 宿主**配置现状与默认值速查**：已生效键↔片段对照 + 未配置默认 | 快照 2026-09-05、pi 0.85.0；改配置须三处同步（当前片段表 + 本文 + README） | settings/pi/ |
 | `dsh/skills-settings-loading.md` | dsh 宿主 skills/settings **加载机制** + **插件管理框架**（issue #8/#17/#34/#35） | skills：`~/.agents/skills` 被 dsh 直接读（filesystem 提供方 user-agents 根 rank500），与 pi 同源零插件；settings：`~/.dsh/settings.yaml` YAML namespace；dsh **无 pi models.json/cost 对应物**；插件：经 `dsh plugin --profile <p> add/remove`，清单 `DSH_PLUGINS_BY_PROFILE`（当前空，仅框架） | install.py #17/#35 |
 | `dsh/architecture.md` | dsh **运行架构总览**：profile/bundle/插件/前端(web·headless)/skill·context·hook/overlay patch 契约；dsh 资料库政策 | dsh 官方资料稀缺，本文件 + `notes/dsh/` 为 dsh 知识库**持续补充**；版本依据 0.1.1-rc.2/profile=web 实机；overlay `--patch` 语法已定案，实际交付留首个真实消费方（issue #36） | issue #36、notes/dsh/ 全目录 |
+| `dsh/0.1.0/` | dsh 0.1.1-rc.2 系列评估：01 自带插件 / 02 开关 / 03 Cordis 架构 / 04-29 深入主题（preset、双面插件、tools、session、RPC、沙箱、scope、loader、code mode、telemetry 等） | 从 dsh-mint 迁移；基于 dsh 0.1.1-rc.2/profile=web 实机；dsh 早期版本，API/机制可能变化，后续按新版本重评 | notes/dsh/0.1.0/ 目录 |
 
 > **dsh 资料库（notes/dsh/）**：dsh 官方资料少，涉及 dsh 的调研/决策持续归入 `notes/dsh/`
 > 下新建或增补文件，并在上方文档清单登记；勿散落到 notes/ 根目录。
