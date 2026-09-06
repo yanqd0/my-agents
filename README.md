@@ -32,7 +32,7 @@ dsh 的 `--target dsh` **装 skills 到 `~/.agents/skills`**（与 pi 共用；d
 **插件管理框架**：可把插件经 `dsh plugin` 装入指定 dsh profile（web/headless/…）；清单
 `DSH_PLUGINS_BY_PROFILE` 目前为空、仅框架（有真实插件再补）。dsh 的模型/cost 由 provider
 插件管理、设置是个人 `~/.dsh/settings.yaml`，无 pi 式 `settings/models` 片段可合并，故 dsh
-不装 settings/models/extensions（机制见 `notes/dsh-skills-settings-loading.md`）。
+不装 settings/models/extensions（机制见 `notes/dsh/skills-settings-loading.md`）。
 
 模型定义/价格更新需 `--force`（模型 `models` 数组为既有键，默认不覆盖）。
 

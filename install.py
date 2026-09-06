@@ -20,7 +20,7 @@ For each host this project provides several kinds of installable content:
               重跑即刷新（软链指向的 store 路径可能随版本/prune 漂移，重跑会 re-link）。
 
 `src == None` 表示该 host 不装该项（install/uninstall 跳过）。dsh 的 skills/settings 加载
-机制调研见 notes/dsh-skills-settings-loading.md。
+机制调研见 notes/dsh/skills-settings-loading.md。
 
 `_` 前缀文件默认跳过安装，可用 --force 显式启用。模型定义/价格更新需 --force
 （models 数组为既有键，默认 merge 不覆盖）。
@@ -65,7 +65,7 @@ HOSTS = {
         "skills_dest": HOME / ".agents" / "skills",
         # settings: dsh 无 pi 式 models.json/settings.json 深合并对象。其配置是
         #         ~/.dsh/settings.yaml 的 YAML namespace 文档（个人 harness 配置）、模型/cost
-        #         由 provider 插件管理（见 notes/dsh-skills-settings-loading.md）→ 0.2.0 不装。
+        #         由 provider 插件管理（见 notes/dsh/skills-settings-loading.md）→ 0.2.0 不装。
         #         置 None 表示该 host 不装此项（install/uninstall 会跳过）。
         "settings_src": None,
         "settings_dest": None,
