@@ -10,6 +10,7 @@
 
 | 文件 | 主题 / 定位 | 现状 / 关键结论 | 关联 |
 |------|------------|----------------|------|
+| `my-agents-skills-reuse.md` | skills 复用架构**决策**：my-claude submodule + 软链拼装 | my-claude=只管 Claude Code（不做跨宿主中性化）；my-agents 经 `vendor/my-claude` submodule + 软链拼装，SKILL.md/pi 专属 references 本地留；25 中性文件已软链；install.py 扁平 CLI/`--revert`。曾走弯路（把 my-claude 中性化成 canonical）已纠正 | vendor/my-claude、install.py、AGENTS.md |
 | `pi-extension-plugin-selection.md` | pi 扩展/插件**技术选型**：T0/T1/T2 三档政策与候选清单 | T1 采用**「(B) 动态软链已装 pi」**（曾选 (a) 收编 vendor，已重审撤销并清历史）；T2 落地前需审源码+锁版本 | tools/pi-examples.sh、install.py 扩展步、issue #9-#12 |
 | `pi-config.md` | pi 宿主**配置现状与默认值速查**：已生效键↔片段对照 + 未配置默认 | 快照 2026-09-05、pi 0.85.0；改配置须三处同步（当前片段表 + 本文 + README） | settings/pi/ |
 

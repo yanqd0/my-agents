@@ -7,10 +7,14 @@
 
 | 目录 | 内容 | 安装去向 |
 |------|------|----------|
-| `skills/` | 通用 Agent Skills（`SKILL.md` + 参考资料） | `~/.agents/skills/` |
+| `skills/` | pi/跨宿主 Agent Skills（`SKILL.md` + 参考资料；中性参考软链自 submodule） | `~/.agents/skills/` |
 | `settings/pi/` | pi 设置片段 | `~/.pi/agent/settings.json` |
 | `settings/pi/model/` | pi 模型定义与价格片段 | `~/.pi/agent/models.json` |
+| `vendor/my-claude/` | my-claude git submodule（上游内容源，仅 Claude Code 用） | — |
 | `install.py` | 多目标安装器（当前 `--target pi`） | — |
+
+> `skills/` 中与上游 my-claude 一致的中性参考资料/脚本为软链（指向 `vendor/my-claude`），
+> 只维护一份；`SKILL.md` 与 pi 专属差异文件在本地维护。共享内容改到 my-claude 上游仓库即可。
 
 ## 安装
 
@@ -18,7 +22,7 @@
 ./install.py                      # 默认安装到 pi
 ./install.py --dry-run            # 预览，不落盘
 ./install.py --force              # 覆盖已有设置键，并启用 `_` 前缀的片段
-./install.py uninstall            # 卸载
+./install.py --revert             # 卸载
 
 # 其它宿主（规划中）
 ./install.py --target dsh
