@@ -12,6 +12,8 @@ For each host this project provides several kinds of installable content:
   - models: settings/<host>/model/*.json deep-merge 到该宿主的模型定义文件
               (pi -> ~/.pi/agent/models.json，含各模型 cost 价格；dsh 的模型/cost 由
               provider 插件管理，无 pi models.json 对应物 → 不装)
+  - plugins (dsh): 按 DSH_PLUGINS_BY_PROFILE 把插件装进指定 dsh profile，经
+              `dsh plugin --profile <p> add/remove`（幂等、revert=remove）。当前为空→仅框架。
   - extensions (pi): T1 必要官方 example <不本仓库收编>，改由 <tools/pi-examples.sh> 定位
               **已装 pi 包**自带的 examples/extensions，将白名单条目软链到
               ~/.pi/agent/extensions/。扩展含完整系统权限 → 分发需确认/--yes；升级 pi 后
@@ -27,6 +29,7 @@ For each host this project provides several kinds of installable content:
 import argparse
 import json
 import os
+import shutil
 import subprocess
 import sys
 from pathlib import Path
@@ -71,6 +74,17 @@ HOSTS = {
     },
     # codex/opencode: 后续在此补宿主布局
 }
+
+
+# ── dsh plugins（framework-only 目前为空） ────────────────────────────────
+# dsh 的「插件」是 cordis/npm 包，需经 dsh 官方封装 `dsh plugin --profile <p>
+# <pnpm add/remove>` 装进某个 profile（web/headless/tui/自定义名）。本清单是
+# 单一真源：dict: profile -> [bare npm 包名, ...]。目前为空 → 只提供框架、不实装。
+# 待有真实插件时在此补，如：
+#   DSH_PLUGINS_BY_PROFILE = {"web": ["@scope/some-plugin"], "headless": []}
+# 进阶（link:/相对路径 spec、原生模块需在 profile pnpm-workspace.yaml 的
+# allowBuilds 放行等）暂不实现，仅留此口。
+DSH_PLUGINS_BY_PROFILE = {}
 
 
 def repo_root() -> Path:
@@ -361,6 +375,72 @@ def _uninstall_extensions(dry_run: bool) -> None:
         print("  skip   : 无 T1 扩展软链")
 
 
+# ── dsh plugins（经 `dsh plugin` 封装，框架；清单默认空） ────────────────
+def _dsh_home() -> Path:
+    """dsh harness 配置根：$DSH_HOME 或 ~/.dsh。"""
+    return Path(os.environ.get("DSH_HOME") or HOME / ".dsh")
+
+
+def _dsh_profile_deps(profile: str) -> set:
+    """读某 dsh profile 的 package.json dependencies 键集合（幂等/回滚判定）。"""
+    pkg = _dsh_home() / "profiles" / profile / "package.json"
+    try:
+        return set(json.loads(pkg.read_text()).get("dependencies", {}))
+    except (OSError, json.JSONDecodeError):
+        return set()
+
+
+def _run_dsh_plugin(profile: str, action: str, name: str, dry_run: bool) -> None:
+    """执行 `dsh plugin --profile <p> <action> <name>`（add/remove）。"""
+    cmd = ["dsh", "plugin", "--profile", profile, action, name]
+    label = " ".join(cmd)
+    print(f"{'[dry]  ' if dry_run else '  '}{action} dsh-plugin {name} (profile={profile})")
+    if dry_run:
+        return
+    try:
+        proc = subprocess.run(cmd, capture_output=True, text=True)
+    except OSError as exc:
+        print(f"  error : 执行失败 {label}: {exc}")
+        return
+    if proc.stdout:
+        print("  " + proc.stdout.strip().replace("\n", "\n  "))
+    if proc.returncode != 0:
+        print(f"  error : {label} 退出码 {proc.returncode}: {proc.stderr.strip()}")
+
+
+def _dsh_plugins(dry_run: bool) -> None:
+    """dsh 目标：按 DSH_PLUGINS_BY_PROFILE 把插件装进对应 profile（空清单则跳过）。"""
+    print("- plugins:")
+    if not DSH_PLUGINS_BY_PROFILE:
+        print("  skip   : 未声明 dsh 插件（DSH_PLUGINS_BY_PROFILE 为空，仅框架）")
+        return
+    if shutil.which("dsh") is None or shutil.which("pnpm") is None:
+        print("  warn   : 需要 dsh 与 pnpm 在 PATH（dsh 用于 profile 插件管理）")
+        return
+    for profile, names in sorted(DSH_PLUGINS_BY_PROFILE.items()):
+        installed = _dsh_profile_deps(profile)
+        for name in names:
+            if name in installed:
+                print(f"  skip   : {name} (profile={profile} 已装)")
+                continue
+            _run_dsh_plugin(profile, "add", name, dry_run)
+
+
+def _uninstall_dsh_plugins(dry_run: bool) -> None:
+    """dsh 目标：卸载 DSH_PLUGINS_BY_PROFILE 里的插件（remove）。"""
+    print("- plugins:")
+    if not DSH_PLUGINS_BY_PROFILE:
+        print("  skip   : 未声明 dsh 插件（DSH_PLUGINS_BY_PROFILE 为空，仅框架）")
+        return
+    for profile, names in sorted(DSH_PLUGINS_BY_PROFILE.items()):
+        installed = _dsh_profile_deps(profile)
+        for name in names:
+            if name not in installed:
+                print(f"  skip   : {name} (profile={profile} 未装)")
+                continue
+            _run_dsh_plugin(profile, "remove", name, dry_run)
+
+
 # ── actions ──────────────────────────────────────────────────────────────
 def install(host: dict, dry_run: bool, force: bool, assume_yes: bool) -> None:
     root = repo_root()
@@ -383,6 +463,8 @@ def install(host: dict, dry_run: bool, force: bool, assume_yes: bool) -> None:
         _install_settings(root / model_src, host["model_dest"], force, dry_run)
     if host["name"] == "pi":
         _install_extensions(dry_run, assume_yes)
+    elif host["name"] == "dsh":
+        _dsh_plugins(dry_run)
 
 
 def uninstall(host: dict, dry_run: bool, force: bool) -> None:
@@ -404,6 +486,8 @@ def uninstall(host: dict, dry_run: bool, force: bool) -> None:
         _revert_settings(root / model_src, host["model_dest"], force, dry_run)
     if host["name"] == "pi":
         _uninstall_extensions(dry_run)
+    elif host["name"] == "dsh":
+        _uninstall_dsh_plugins(dry_run)
 
 
 def main() -> None:
