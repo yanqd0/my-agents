@@ -113,6 +113,26 @@ def _unlink_items(src_dir: Path, dst_dir: Path, dry_run: bool) -> int:
     return removed
 
 
+def _verify_nested_links(src_dir: Path) -> int:
+    """校验 skills 源内指向 submodule 的嵌套软链可解析。
+
+    软链进整目录后，skill 内部 references/scripts 若为指向 vendor/my-claude 的
+    软链，需子模块已 checkout 才可达；失效即提示用户 init 子模块。返回失效数。
+    """
+    broken = 0
+    for dp, dn, fn in os.walk(src_dir):
+        dn[:] = [d for d in dn if d != ".git"]
+        for f in fn:
+            p = Path(dp) / f
+            if p.is_symlink() and not p.exists():
+                print(f"  warn   : 嵌套软链失效 {p.relative_to(repo_root())}"
+                      f"  (子模块未 checkout？跑 git submodule update --init)")
+                broken += 1
+    if broken:
+        print(f"  warn   : {broken} 处嵌套软链失效，请先初始化子模块 vendor/my-claude")
+    return broken
+
+
 # ── settings（deep-merge） ───────────────────────────────────────────────
 def _deep_merge(base: dict, overlay: dict, force: bool = False) -> None:
     """把 overlay 合入 base。标量仅当 base 缺失才写入，除非 force。"""
@@ -307,6 +327,7 @@ def install(host: dict, dry_run: bool, force: bool, assume_yes: bool) -> None:
     print(f"[install] target={host['name']}")
     print("- skills:")
     _symlink_items(root / host["skills_src"], host["skills_dest"], dry_run)
+    _verify_nested_links(root / host["skills_src"])
     print("- settings:")
     _install_settings(root / host["settings_src"], host["settings_dest"], force, dry_run)
     print("- models:")
@@ -337,16 +358,15 @@ def main() -> None:
                         help="强制覆盖已有 settings 键并启用 `_` 前缀文件")
     parser.add_argument("--yes", "-y", action="store_true",
                         help="扩展软链免交互确认（headless 下必须）")
-    parser.add_argument("action", nargs="?", default="install",
-                        choices=["install", "uninstall"],
-                        help="install（默认）或 uninstall")
+    parser.add_argument("--revert", action="store_true",
+                        help="卸载：移除本项目装入的 skills/settings/models/extensions")
     args = parser.parse_args()
 
     host = HOSTS[args.target]
-    if args.action == "install":
-        install(host, args.dry_run, args.force, args.yes)
-    else:
+    if args.revert:
         uninstall(host, args.dry_run, args.force)
+    else:
+        install(host, args.dry_run, args.force, args.yes)
 
 
 if __name__ == "__main__":
