@@ -1,20 +1,24 @@
 #!/usr/bin/env python3
 """Install this project's content to a target agent host.
 
-Multi-host source project. Currently pi is the supported target; dsh and other
-hosts (codex/opencode) are added later behind the same --target contract.
+Multi-host source project. Targets pi (default) and dsh behind the same --target
+contract; codex/opencode are added later.
 
 For each host this project provides several kinds of installable content:
   - skills : 通用 Agent Skills，软链到该宿主共享的 skills 目录
-              (pi 读 ~/.agents/skills，递归发现含 SKILL.md 的目录)
+              (pi/dsh 均读 ~/.agents/skills；dsh-skill-filesystem 默认直接发现，无需插件)
   - settings: settings/<host>/*.json deep-merge 到该宿主的 settings 文件
-              (pi -> ~/.pi/agent/settings.json)
+              (pi -> ~/.pi/agent/settings.json；dsh 无对应 JSON 文件 → 不装)
   - models: settings/<host>/model/*.json deep-merge 到该宿主的模型定义文件
-              (pi -> ~/.pi/agent/models.json；含各模型 cost 价格)
+              (pi -> ~/.pi/agent/models.json，含各模型 cost 价格；dsh 的模型/cost 由
+              provider 插件管理，无 pi models.json 对应物 → 不装)
   - extensions (pi): T1 必要官方 example <不本仓库收编>，改由 <tools/pi-examples.sh> 定位
               **已装 pi 包**自带的 examples/extensions，将白名单条目软链到
               ~/.pi/agent/extensions/。扩展含完整系统权限 → 分发需确认/--yes；升级 pi 后
               重跑即刷新（软链指向的 store 路径可能随版本/prune 漂移，重跑会 re-link）。
+
+`src == None` 表示该 host 不装该项（install/uninstall 跳过）。dsh 的 skills/settings 加载
+机制调研见 notes/dsh-skills-settings-loading.md。
 
 `_` 前缀文件默认跳过安装，可用 --force 显式启用。模型定义/价格更新需 --force
 （models 数组为既有键，默认 merge 不覆盖）。
@@ -50,7 +54,22 @@ HOSTS = {
         "model_src": "settings/pi/model",
         "model_dest": HOME / ".pi" / "agent" / "models.json",
     },
-    # dsh/codex/opencode: 0.2.0+ 在此补宿主布局
+    "dsh": {
+        "name": "dsh",
+        # skills: 软链 skills/* -> <shared skills dir>。dsh-skill-filesystem 默认把
+        #         ~/.agents/skills 作 user-agents 根直接发现（rank500，无需插件）——与 pi 同源。
+        "skills_src": "skills",
+        "skills_dest": HOME / ".agents" / "skills",
+        # settings: dsh 无 pi 式 models.json/settings.json 深合并对象。其配置是
+        #         ~/.dsh/settings.yaml 的 YAML namespace 文档（个人 harness 配置）、模型/cost
+        #         由 provider 插件管理（见 notes/dsh-skills-settings-loading.md）→ 0.2.0 不装。
+        #         置 None 表示该 host 不装此项（install/uninstall 会跳过）。
+        "settings_src": None,
+        "settings_dest": None,
+        "model_src": None,
+        "model_dest": None,
+    },
+    # codex/opencode: 后续在此补宿主布局
 }
 
 
@@ -350,10 +369,18 @@ def install(host: dict, dry_run: bool, force: bool, assume_yes: bool) -> None:
     _symlink_items(root / host["skills_src"], host["skills_dest"], dry_run)
     _verify_nested_links(root / host["skills_src"])
     _audit_dedup(root / host["skills_src"])
-    print("- settings:")
-    _install_settings(root / host["settings_src"], host["settings_dest"], force, dry_run)
-    print("- models:")
-    _install_settings(root / host["model_src"], host["model_dest"], force, dry_run)
+    settings_src = host["settings_src"]
+    if settings_src is None:
+        print("- settings:（该 host 无此项，跳过）")
+    else:
+        print("- settings:")
+        _install_settings(root / settings_src, host["settings_dest"], force, dry_run)
+    model_src = host["model_src"]
+    if model_src is None:
+        print("- models:（该 host 无此项，跳过）")
+    else:
+        print("- models:")
+        _install_settings(root / model_src, host["model_dest"], force, dry_run)
     if host["name"] == "pi":
         _install_extensions(dry_run, assume_yes)
 
@@ -363,10 +390,18 @@ def uninstall(host: dict, dry_run: bool, force: bool) -> None:
     print(f"[uninstall] target={host['name']}")
     print("- skills:")
     _unlink_items(root / host["skills_src"], host["skills_dest"], dry_run)
-    print("- settings:")
-    _revert_settings(root / host["settings_src"], host["settings_dest"], force, dry_run)
-    print("- models:")
-    _revert_settings(root / host["model_src"], host["model_dest"], force, dry_run)
+    settings_src = host["settings_src"]
+    if settings_src is None:
+        print("- settings:（该 host 无此项，跳过）")
+    else:
+        print("- settings:")
+        _revert_settings(root / settings_src, host["settings_dest"], force, dry_run)
+    model_src = host["model_src"]
+    if model_src is None:
+        print("- models:（该 host 无此项，跳过）")
+    else:
+        print("- models:")
+        _revert_settings(root / model_src, host["model_dest"], force, dry_run)
     if host["name"] == "pi":
         _uninstall_extensions(dry_run)
 

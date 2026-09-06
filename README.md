@@ -1,7 +1,7 @@
 # my-agents
 
 个人 agent 内容源：集中维护我各 agent 宿主使用的 skills、设置片段与扩展，并用一个安装器
-一键装到位。当前主目标是 **pi**，未来扩展 **dsh / Codex / OpenCode**。
+一键装到位。已支持 **pi**、**dsh**（skills），未来扩展 **Codex / OpenCode**。
 
 ## 内容
 
@@ -11,7 +11,7 @@
 | `settings/pi/` | pi 设置片段 | `~/.pi/agent/settings.json` |
 | `settings/pi/model/` | pi 模型定义与价格片段 | `~/.pi/agent/models.json` |
 | `vendor/my-claude/` | my-claude git submodule（上游内容源，仅 Claude Code 用） | — |
-| `install.py` | 多目标安装器（当前 `--target pi`） | — |
+| `install.py` | 多目标安装器（`--target pi` / `--target dsh`） | — |
 
 > `skills/` 中与上游 my-claude 一致的中性参考资料/脚本为软链（指向 `vendor/my-claude`），
 > 只维护一份；`SKILL.md` 与 pi 专属差异文件在本地维护。共享内容改到 my-claude 上游仓库即可。
@@ -24,9 +24,13 @@
 ./install.py --force              # 覆盖已有设置键，并启用 `_` 前缀的片段
 ./install.py --revert             # 卸载
 
-# 其它宿主（规划中）
-./install.py --target dsh
+# 其它宿主
+./install.py --target dsh      # dsh：装 skills 到 ~/.agents/skills（dsh 自动发现）
 ```
+
+dsh 的 `--target dsh` **只装 skills**（与 pi 共用 `~/.agents/skills`）：dsh 的模型/cost 由
+provider 插件管理、设置是个人 `~/.dsh/settings.yaml`，无 pi 式 `settings/models` 片段可合并，
+故 dsh 不装 settings/models/extensions（机制见 `notes/dsh-skills-settings-loading.md`）。
 
 模型定义/价格更新需 `--force`（模型 `models` 数组为既有键，默认不覆盖）。
 
