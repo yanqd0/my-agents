@@ -1,19 +1,23 @@
 # my-agents
 
-面向 `~/.agents`（以及各 host 专属位置）的个人 agent 内容源项目，参照
-[`../my-claude/`](../my-claude/)（目标 `~/.claude`）建设，但服务对象是 **跨多个 agent
+面向 `~/.agents`（以及各 host 专属位置）的个人 agent 内容源项目，服务于 **跨多个 agent
 宿主**：当前以 **pi**（主）、**dsh** 为安装目标，未来扩展 **Codex / OpenCode**。
 
-> 与 my-claude 的差异：内容不写死在某一宿主目录语义下，而是以「通用 Agent Skills +
-> 每宿主专属片段 + 多目标安装器」组织；`AGENTS.md` 说明本项目结构，配合 `install.py`
-> 把内容安装到目标 host 的 `~/.agents/skills` 等位置。
+> 与 my-claude 的关系：**my-claude 只管理 Claude Code 自身**（Claude 专属内容），不承担
+> 跨宿主职责；**my-agents 作为跨宿主层，经 submodule（`vendor/my-claude`）引入 my-claude，
+> skills 通过软链拼装**——真正共享的中性 references/scripts 软链自 submodule，宿主差异
+> （SKILL.md、pi 专属 references）在 my-agents 本地维护。my-claude 的 skills 是这些软链的
+> 上游单一事实源。
 
 ## 目录结构
 
 - `AGENTS.md` — 本项目规范（本文件），安装/开发前必读
-- `install.py` — 多目标安装器：`--target pi|dsh`，负责软链 skills、deep-merge settings 等
-- `skills/<name>/` — **通用** skill 源（含 `SKILL.md` + 可选 `references/`/`scripts/`），
-  统一按 Agent Skills 规范组织，作为 pi / dsh / codex 共享的 `~/.agents/skills` 来源
+- `install.py` — 多目标安装器：扁平 CLI（对齐上游 my-claude，无子命令），`--revert` 代表卸载
+- `vendor/my-claude/` — **git submodule**（相对 URL `../my-claude`），上游 Claude-only 内容源；
+  skills 的中性 references/scripts 软链源头。改动需在该仓库提交后 bump 子模块指针。
+- `skills/<name>/` — **pi/跨宿主** skill 源（含 `SKILL.md` + 可选 `references/`/`scripts/`），
+  按 Agent Skills 规范组织，作为 `~/.agents/skills` 来源。`SKILL.md` 与 pi 专属差异文件本地维护；
+  与上游一致的中性 references/scripts 为软链（指向 `vendor/my-claude`），共享只维护一份。
 - `settings/<host>/` — 每宿主专属片段：顶层 `settings/pi/*.json` → 合并进
   `~/.pi/agent/settings.json`；`settings/pi/model/*.json` → 合并进
   `~/.pi/agent/models.json`（模型定义 + 价格）
@@ -27,7 +31,8 @@
 
 ## 安装机制（install.py）
 
-- **skills**：`skills/*`（目录）软链到目标 host 的 skills 目录
+- **skills**：`skills/*`（目录）软链到目标 host 的 skills 目录；skill 内的中性 references/scripts
+  软链自 `vendor/my-claude`（子模块需已 checkout；未 init 会在装时 warn 提示）
   - pi 读 `~/.agents/skills/`（含 `SKILL.md` 的目录被递归发现）；`~/.agents` 是宿主无关的
     共享位置，dsh/codex 未来亦从此读取（按 Agent Skills 标准）
   - 目标 skills 目录：`~/.agents/skills/`
@@ -39,14 +44,19 @@
   自带 examples/extensions，把白名单项（plan-mode/subagent/question/permission-gate/todo）软链到
   `~/.pi/agent/extensions/`（pi 自动发现）。扩展含完整系统权限 → 需 `--yes`/交互确认；**升级 pi 后
   重跑 install.py 即刷新**到新版本源。卸载移除这些软链。
-- 提供 install / uninstall / dry-run / `--yes` / `_` 前缀默认跳过等能力，语义对齐 my-claude 的
-  `install.py`，但去掉 Claude Code 专属的 commands/hooks/agents/mcp 部分（pi 无对应结构）。
+- CLI 为**扁平参数**（对齐上游 my-claude）：默认安装，`--revert` 卸载，配 `--dry-run`/
+  `--yes`/`--force`；`_` 前缀片段默认跳过（`--force` 启用）。去掉了 my-claude 的 Claude 专属
+  commands/hooks/agents/mcp 部分（pi 无对应结构）。
 
-## 迁移原则（来自 my-claude 内容时）
+## 复用原则（my-claude 内容 → my-agents）
 
+0. **拼装而非搬副本**：my-claude 保持 Claude 专属、只管理自身；my-agents 经 `vendor/my-claude`
+   submodule + 软链拼装 skill。共享判定：整 skill 内容与 pi 一致 → 整目录软链；`SKILL.md` 因宿主
+   差异分叉 → 本地维护 pi `SKILL.md`，仅中性 references/scripts 软链；纯 pi 专属（如 my-image-vision
+   用 DeepSeek 而 claude 用 Anthropic）references 留本地。改动共享内容需在 my-claude 提交并 bump 子模块。
 1. **择取（不是全搬）**：逐项评估「该 host 是否真的需要」。pi 无 Claude Code 的
    `commands`/`hooks`/`agents`/`AskUserQuestion`/`mem-lite`/`CLAUDE.md` 等结构，凡深度绑定
-   这些的片段必须**裁剪或重写**而非照搬。my-claude 的 `my-new-agent`（产出 `.claude/agents/`）、
+   这些的片段必须裁剪或重写而非照搬。my-claude 的 `my-new-agent`（产出 `.claude/agents/`）、
    code-reviewer/security-auditor 自动派出等 0.1.0 不迁移。
 2. **通用规范**：skill 一律用 Agent Skills 标准（`SKILL.md` + frontmatter），宿主差异
    尽量下沉到内容里避免。跨 host 才保留；单 host 专才放 `settings/<host>`。
@@ -71,10 +81,11 @@
 
 ## 路线图
 
-- **0.1.0（当前）— pi 主目标，迁移 skills + settings**
-  - 结构搭建：`skills/`、`settings/pi/`、`install.py`（pi 目标）
-  - skills 迁移（择取 + 针对 pi 重写）与 settings（首版基于 pi）
-  - 完成后：重指 `~/.agents/skills` 软链到本项目的 `skills/`，清掉对 my-claude 的重复引用
+- **0.1.0（当前）— pi 主目标，skills 组合复用 + settings**
+  - 结构：`skills/`（pi 宿主风味）、`settings/pi/`、`install.py`、`vendor/my-claude` submodule
+  - skills 软链拼装（中性 references 软链自 submodule，本地维护 pi `SKILL.md` 与差异文件）
+  - 完成后：`~/.agents/skills` 指向本项目 `skills/`，去掉 my-agents 对 my-claude 的重复副本
+    （my-claude 本身仍以 submodule 形式被消费，非删除）
 - **0.2.0 — 支持 dsh + 更复杂内容**
   - 调研 dsh 的 profile/plugin（cordis/dsh-agent-instructions 等）加载 skills 的机制，
     确定 skills/settings 落到何处
