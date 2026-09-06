@@ -77,20 +77,26 @@ dsh 的「插件」是 cordis/npm 包，靠 profile 装配生效，与 skills（
   `dsh.bundle` 的依赖**自动并入**该 profile `dsh.profile.bundles`；`remove` 则移出。纯库
   （无 `dsh.bundle`）只作依赖、告警不入层。
 - **单一真源（已实装，见 install.py）**：install.py 的 `DSH_PLUGINS_BY_PROFILE`（dict：
-  `profile -> [(声明 npm 名, pnpm spec), …]`，key 任意，如 web/headless/tui/自定义名）。
+  `profile -> [(声明 npm 名, [候选源 spec …]), …]`，key 任意，如 web/headless/tui/自定义名）。
   web 现含 4 个第三方插件（dshmarket / dsh-whale-widget / graph-memory / dsh-calculator）。
+  候选源按序尝试：npm registry 名 → `github:`（git https clone）→ codeload tarball
+  （git 不通时自动退，均保持 https）。
   重复执行 = 缺装项 add + 已装项**更新检查**：registry spec 查 `pnpm view`、github spec 查
   GitHub HEAD 版本，默认只报告、`--update` 才升级（registry 走 `pnpm update --latest`、
-  github 走 `pnpm update`）；`--revert` 对应 remove。逐插件选择与评估、allowBuilds 等
-  注意事项见 `notes/dsh/plugin-selection-web.md`。
+  github 走 `pnpm update`）；`--revert` 对应 remove。逐插件选择与评估、autoInstallPeers
+  前置等注意事项见 `notes/dsh/plugin-selection-web.md`。
 - **幂等 / 回滚**：add 前读该 profile `package.json.dependencies`，已在 → skip；revert =
   `remove`（不在则 skip）。缺 `dsh`/`pnpm` 在 PATH → 告警跳过。
 - **注意事项**：
   - `dsh plugin` 会改写**真实 profile**（package.json/pnpm-lock/node_modules），并在 profile
     缺失时自动 init（副作用）。目标若是正运行的 GUI profile（web），建议该 profile 非活跃时
     执行；不在 profile 目录内并行 pnpm。
-  - 原生/安装脚本模块需在 profile `pnpm-workspace.yaml` 的 `allowBuilds` 放行（失败提示引导）；
-    git/`link:` 相对 spec 的进阶内容暂不实现（框架注释留口）。
+  - **peer 自动安装陷阱**：profile workspace `autoInstallPeers: true` 时，peer 范围对不上
+    registry 正式版（如 `@deepseek-ai/dsh-*@^0.0.1`，npm 只有 rc）会整次 add 失败
+    （`ERR_PNPM_NO_MATCHING_VERSION`，与传输无关）→ 改 `autoInstallPeers: false`
+    （dsh initProfile 默认值）后重跑；install.py 会检测并提示。
+  - 原生/安装脚本模块需在 profile `pnpm-workspace.yaml` 的 `allowBuilds` 放行（install.py
+    失败时提示引导）；git/`link:` 相对 spec 由候选源机制处理（见 plugin-selection-web.md）。
   - **配置型（非 bundle）插件**与 system-prompt section（如 plan-mode 文本）不属本框架，走
     overlay `--patch`（见 issue #36，未实现）。
 - **web 现状先例**：`~/.dsh/profiles/web/package.json` 以 `link:` 引入本地

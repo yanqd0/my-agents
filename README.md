@@ -32,8 +32,13 @@
 dsh 的 `--target dsh` **装 skills 到 `~/.agents/skills`**（与 pi 共用；dsh 自动发现），并按
 `install.py` 中 `DSH_PLUGINS_BY_PROFILE` 的清单把 **dsh 第三方插件**经 `dsh plugin --profile web
 add` 装入 **web profile**（当前 4 个：dshmarket / dsh-whale-widget / graph-memory /
-dsh-calculator）。缺装项每次重跑自动补装（幂等）；已装项重跑时做**更新检查**（registry 与
-GitHub HEAD 版本对比），发现新版本默认仅报告，加 `--update` 才实际升级；`--revert` 一并卸载。
+dsh-calculator）。缺装项每次重跑自动补装（幂等），**安装源按序候选**：优先 npm registry 名，
+其次 `github:`（https clone），git 不通时自动退到 codeload https tarball（保持 https，勿改
+SSH）。已装项重跑时做**更新检查**（registry 与 GitHub HEAD 版本对比），发现新版本默认仅报告，
+加 `--update` 才实际升级；`--revert` 一并卸载。
+首次装 dsh-calculator 前需把 `~/.dsh/profiles/web/pnpm-workspace.yaml` 的 `autoInstallPeers`
+改为 `false`（dsh initProfile 默认值；否则其 `@deepseek-ai/dsh-*@^0.0.1` peer 无正式版会卡住
+安装）。
 评估与逐插件说明见 `notes/dsh/plugin-selection-web.md`。dsh 的模型/cost 由 provider 插件管理、
 设置是个人 `~/.dsh/settings.yaml`，无 pi 式 `settings/models` 片段可合并，故 dsh 不装
 settings/models/extensions（机制见 `notes/dsh/skills-settings-loading.md`）。

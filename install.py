@@ -13,10 +13,12 @@ For each host this project provides several kinds of installable content:
               (pi -> ~/.pi/agent/models.json，含各模型 cost 价格；dsh 的模型/cost 由
               provider 插件管理，无 pi models.json 对应物 → 不装)
   - plugins (dsh): 按 DSH_PLUGINS_BY_PROFILE 把插件装进指定 dsh profile，经
-              `dsh plugin --profile <p> add/remove` 安装/卸载。已装项在每次重跑时做
-              **更新检查**（npm registry 版本对比 / GitHub HEAD 版本对比），发现新版本
-              默认仅报告，加 `--update` 才实际升级（registry 走 `pnpm update --latest`、
-              github spec 走 `pnpm update`）。缺装项始终 add，故重跑幂等且可检更新。
+              `dsh plugin --profile <p> add/remove` 安装/卸载。**安装源按序候选**：
+              优先 npm registry 名，其次 `github:`（git 走 https clone），git 不通时
+              自动退到 codeload https tarball。已装项在每次重跑时做**更新检查**
+              （npm registry 版本对比 / GitHub HEAD 版本对比），发现新版本默认仅报告，
+              加 `--update` 才实际升级（registry 走 `pnpm update --latest`、git/tarball
+              走 `pnpm update`）。故重跑幂等且可检更新、网络不稳时有备选源。
   - extensions (pi): T1 必要官方 example <不本仓库收编>，改由 <tools/pi-examples.sh> 定位
               **已装 pi 包**自带的 examples/extensions，将白名单条目软链到
               ~/.pi/agent/extensions/。扩展含完整系统权限 → 分发需确认/--yes；升级 pi 后
@@ -84,24 +86,40 @@ HOSTS = {
 # ── dsh plugins（web profile 第三方插件清单） ─────────────────────────────
 # dsh 的「插件」是 cordis/npm 包，需经 dsh 官方封装 `dsh plugin --profile <p>
 # <pnpm add/remove/update>` 装进某个 profile（web/headless/tui/自定义名）。本清单是
-# 单一真源：dict: profile -> [(声明名, pnpm spec), ...]。
+# 单一真源：dict: profile -> [(声明 npm 名, [候选源 spec …]), …]。
 #   - 声明名 = 装进 profile package.json 的依赖键（= 插件包 package.json 的 name；
-#     github spec 装完后 pnpm 仍以该名记依赖），用于幂等/回滚判定与更新报告。
-#   - spec = 传给 `dsh plugin … add` 的原样 spec：registry 名走 npm（国内镜像友好、
-#     更新检查走 registry）；GitHub 专发（作者未发 npm / npm 包缺 dsh.bundle）用
-#     `github:owner/repo`（装 repo 默认分支 HEAD，需仓库自带构建产物或 prepare 脚本；
-#     更新检查走 GitHub API 的 HEAD 版本）。
-# 更新语义：registry spec → pnpm view 对比最新；github spec → GitHub HEAD package.json
-# 版本对比。重复执行 install.py 只报告；`--update` 才升级。
-# 注意：graph-memory 的依赖含原生模块（@photostructure/sqlite），首次 add 若被 pnpm
-# 阻断构建脚本，需在 profile pnpm-workspace.yaml 的 allowBuilds 放行后重跑（dsh 会在
-# 失败信息中提示 exact key）。目标若是正运行的 GUI profile（web），建议非活跃时执行。
+#     git/tarball spec 装完后 pnpm 仍以该名记依赖），用于幂等/回滚判定与更新报告。
+#   - 候选源按序尝试，成功即停：**优先 npm registry 名**（国内镜像友好、更新检查走
+#     registry）；其次 `github:owner/repo`（pnpm 经 git 走 **https** clone，勿按 dsh
+#     报错建议改 SSH insteadOf——保持 https）；git 不可达时自动退到
+#     `https://codeload.github.com/…/tar.gz/refs/heads/main`（pnpm 自带 fetch 下载，
+#     不经 git，国内网络通常更稳）。codeload spec 需硬编码 refs/heads/main。
+#   - 无 npm 候选 = 该插件 dsh 能力只存在 GitHub 分发（npm 名装了也不激活）：
+#     graph-memory 的 npm 全版本均无 `dsh.bundle`（仍是纯 OpenClaw 插件），
+#     dsh 支持只在仓库 main（1.6.0-beta.x）；dsh-calculator 无 npm 发布。
+# 更新语义：registry 首选 spec → pnpm view 对比最新；github/codeload → GitHub HEAD
+# package.json 版本对比。重复执行 install.py 只报告；`--update` 才升级。
+# 注意：dsh-calculator 的 peer（@deepseek-ai/dsh-*@^0.0.1）无对应正式版——profile workspace
+# 若 autoInstallPeers:true 会整次 add 失败（ERR_PNPM_NO_MATCHING_VERSION），需改为 false
+# （dsh initProfile 默认值；host 内核 peer 经 profiles/node_modules 闭包解析）；若上游依赖
+# 含原生/安装脚本模块，需在 profile pnpm-workspace.yaml 的 allowBuilds 放行后重跑。目标若
+# 是正运行的 GUI profile（web），建议非活跃时执行。失败时 install.py 会打印精确修复提示。
 DSH_PLUGINS_BY_PROFILE = {
     "web": [
-        ("dshmarket", "dshmarket"),                            # dsh-market/dsh-market：设置内插件市场（浏览/一键装/更新/备份）
-        ("dsh-whale-widget", "dsh-whale-widget"),              # MeteorNOX/DeepSeek-Balance-Whale-Widget：余额鲸鱼挂件（npm 已发）
-        ("graph-memory", "github:adoresever/graph-memory"),    # adoresever/graph-memory：知识图谱记忆（dsh 支持仅 GitHub main，npm 未发）
-        ("dsh-calculator", "github:bobcat848/dsh-calculator"), # bobcat848/dsh-calculator：DeepSeek 费用/余额右上角卡片（无 npm 发布）
+        # dsh-market/dsh-market：设置内插件市场（浏览/一键装/更新/备份）
+        ("dshmarket", ["dshmarket"]),
+        # MeteorNOX/DeepSeek-Balance-Whale-Widget：余额鲸鱼挂件（npm 已发）
+        ("dsh-whale-widget", ["dsh-whale-widget"]),
+        # adoresever/graph-memory：知识图谱记忆（npm 无 dsh 版 → GitHub 分发）
+        ("graph-memory", [
+            "github:adoresever/graph-memory",
+            "https://codeload.github.com/adoresever/graph-memory/tar.gz/refs/heads/main",
+        ]),
+        # bobcat848/dsh-calculator：DeepSeek 费用/余额右上角卡片（无 npm 发布）
+        ("dsh-calculator", [
+            "github:bobcat848/dsh-calculator",
+            "https://codeload.github.com/bobcat848/dsh-calculator/tar.gz/refs/heads/main",
+        ]),
     ],
 }
 
@@ -415,9 +433,13 @@ def _spec_is_registry(spec: str) -> bool:
 
 
 def _spec_repo(spec: str) -> str | None:
-    """从 github:owner/repo spec 提取 owner/repo；非 github spec 返回 None。"""
-    if spec.startswith("github:"):
-        return spec[len("github:"):].split("#")[0]
+    """从 github:/codeload spec 提取 owner/repo；registry 名返回 None。"""
+    m = re.match(r"^github:([^/]+/[^#/]+)", spec)
+    if m:
+        return m.group(1)
+    m = re.match(r"^https://codeload\.github\.com/([^/]+/[^/]+)/tar\.gz/", spec)
+    if m:
+        return m.group(1)
     return None
 
 
@@ -474,35 +496,82 @@ def _version_key(version: str) -> tuple:
     return tuple(int(n) for n in nums) or (0,)
 
 
-def _run_dsh_plugin(profile: str, args: list, dry_run: bool) -> None:
-    """执行 `dsh plugin --profile <p> <args…>`（add/remove/update 等，原样转发 pnpm）。"""
+def _run_dsh_plugin(profile: str, args: list, dry_run: bool) -> tuple:
+    """执行 `dsh plugin --profile <p> <args…>`（add/remove/update 等，原样转发 pnpm）。
+
+    返回 (成功?, 失败时 dsh/pnpm stderr 原文)；dry-run 视为成功。"""
     cmd = ["dsh", "plugin", "--profile", profile] + args
     label = " ".join(cmd)
     print(f"{'[dry]  ' if dry_run else '  '}dsh-plugin {profile} {' '.join(args)}")
     if dry_run:
-        return
+        return True, ""
     try:
         proc = subprocess.run(cmd, capture_output=True, text=True)
     except OSError as exc:
         print(f"  error : 执行失败 {label}: {exc}")
-        return
+        return False, str(exc)
     if proc.stdout:
         print("  " + proc.stdout.strip().replace("\n", "\n  "))
     if proc.returncode != 0:
-        print(f"  error : {label} 退出码 {proc.returncode}: {proc.stderr.strip()}")
+        err = proc.stderr or ""
+        print(f"  error : {label} 退出码 {proc.returncode}: {err.strip()}")
+        return False, err
+    return True, ""
 
 
-def _dsh_plugin_available(profile: str, name: str, spec: str) -> str | None:
-    """某插件「上游最新可装版本」：registry spec 查 npm；github spec 查 GitHub HEAD。"""
-    if _spec_is_registry(spec):
+def _plugin_install_hint(profile: str, name: str, err: str) -> None:
+    """把 add 失败按根因分类给出可执行提示（peer 自动安装 / 构建脚本 / 网络）。"""
+    ws = _dsh_home() / "profiles" / profile / "pnpm-workspace.yaml"
+    if "ERR_PNPM_NO_MATCHING_VERSION" in err or "autoInstallPeers" in err or "peer" in err:
+        print(f"  hint   : {name} 被 peer 自动安装卡住（如 No matching version for "
+              f"@deepseek-ai/dsh-*@^0.0.1）。把 {ws} 的 autoInstallPeers 改为 false"
+              "（dsh initProfile 默认即 false；host 内核 peer 经 profiles/node_modules"
+              " 闭包解析，无需 auto-install），再重跑本命令。")
+    if "Ignored build scripts" in err or "allowBuilds" in err or "ERR_PNPM_RECURSIVE" in err:
+        print(f"  hint   : {name} 的依赖含原生/安装脚本被 pnpm 阻断——把上面 pnpm 打印的"
+              f" exact key 加入 {ws} 的 allowBuilds 后重跑。")
+    if "ERR_PNPM_GIT_RESOLVE_FAILED" in err or "Couldn't connect" in err or "RPC failed" in err:
+        print(f"  hint   : {name} 的 GitHub 通道不可达（多为临时网络抖动）。本清单已带"
+              " codeload https 备选源会自动重试；仍失败可稍后重跑 install.py（幂等）。"
+              " 保持 https，勿按 dsh 报错建议改用 SSH insteadOf。")
+
+
+def _install_dsh_plugin(profile: str, name: str, specs: list, dry_run: bool) -> None:
+    """按候选源顺序 add，成功即停（npm → github https clone → codeload tarball）。
+
+    peer/构建脚本类失败与传输无关 → 提示配置修复后直接停，不再换源重试；仅网络类
+    失败才继续尝试下一个候选源。"""
+    for i, spec in enumerate(specs):
+        ok, err = _run_dsh_plugin(profile, ["add", spec], dry_run)
+        if ok:
+            return
+        if _plugin_error_is_config(err):
+            _plugin_install_hint(profile, name, err)
+            return
+        if i < len(specs) - 1:
+            print(f"  warn   : {name} 经 {spec} 安装失败，尝试备选源 …")
+            continue
+        _plugin_install_hint(profile, name, err)
+
+
+def _plugin_error_is_config(err: str) -> bool:
+    """peer 自动安装 / 构建脚本阻断属本地配置问题，换源无用。"""
+    return any(k in err for k in ("ERR_PNPM_NO_MATCHING_VERSION", "autoInstallPeers",
+                                  "Ignored build scripts", "allowBuilds"))
+
+
+def _dsh_plugin_available(profile: str, name: str, specs: list) -> str | None:
+    """某插件「上游最新可装版本」：首选源为 registry → npm view；否则 GitHub HEAD。"""
+    primary = specs[0]
+    if _spec_is_registry(primary):
         return _registry_latest(name)
-    repo = _spec_repo(spec)
+    repo = _spec_repo(primary)
     return _github_head_version(repo) if repo else None
 
 
-def _update_dsh_plugin(profile: str, name: str, spec: str, dry_run: bool) -> None:
-    """把已装插件升到上游最新。registry → pnpm update --latest；github → pnpm update。"""
-    if _spec_is_registry(spec):
+def _update_dsh_plugin(profile: str, name: str, specs: list, dry_run: bool) -> None:
+    """把已装插件升到上游最新。registry → pnpm update --latest；git/tarball → pnpm update。"""
+    if _spec_is_registry(specs[0]):
         _run_dsh_plugin(profile, ["update", "--latest", name], dry_run)
     else:
         _run_dsh_plugin(profile, ["update", name], dry_run)
@@ -511,8 +580,8 @@ def _update_dsh_plugin(profile: str, name: str, spec: str, dry_run: bool) -> Non
 def _dsh_plugins(dry_run: bool, update: bool) -> int:
     """dsh 目标：按 DSH_PLUGINS_BY_PROFILE 装齐插件并做更新检查。
 
-    缺装项 → add（幂等）；已装项 → 对比上游版本：可更新时默认只报告，`update=True`
-    时执行升级。返回「存在更新」计数（含已升级），供概要提示。
+    缺装项 → 按候选源 add（幂等）；已装项 → 对比上游版本：可更新时默认只报告，
+    `update=True` 时执行升级。返回「存在更新」计数（含已升级），供概要提示。
     """
     print("- plugins:")
     if not DSH_PLUGINS_BY_PROFILE:
@@ -524,15 +593,15 @@ def _dsh_plugins(dry_run: bool, update: bool) -> int:
     outdated = 0
     for profile, entries in sorted(DSH_PLUGINS_BY_PROFILE.items()):
         installed = _dsh_profile_deps(profile)
-        for name, spec in entries:
+        for name, specs in entries:
             if name not in installed:
-                _run_dsh_plugin(profile, ["add", spec], dry_run)
+                _install_dsh_plugin(profile, name, specs, dry_run)
                 continue
             print(f"  skip   : {name} (profile={profile} 已装)")
             installed_ver = _installed_version(profile, name)
             if installed_ver is None:
                 continue
-            available = _dsh_plugin_available(profile, name, spec)
+            available = _dsh_plugin_available(profile, name, specs)
             if available is None:
                 print(f"  warn   : {name} 版本核对不可达（registry/GitHub？），已装 {installed_ver}")
                 continue
@@ -540,9 +609,9 @@ def _dsh_plugins(dry_run: bool, update: bool) -> int:
                 outdated += 1
                 verb = "upgrade" if (update and not dry_run) else "update-avail"
                 print(f"  {verb} : {name} {installed_ver} -> {available} "
-                      f"(spec={spec}{', dry-run' if dry_run and update else ''})")
+                      f"(spec={specs[0]}{', dry-run' if dry_run and update else ''})")
                 if update and not dry_run:
-                    _update_dsh_plugin(profile, name, spec, dry_run)
+                    _update_dsh_plugin(profile, name, specs, dry_run)
     if outdated:
         if update and dry_run:
             how = "（--update + --dry-run：仅预览，未实际升级）"
@@ -562,7 +631,7 @@ def _uninstall_dsh_plugins(dry_run: bool) -> None:
         return
     for profile, entries in sorted(DSH_PLUGINS_BY_PROFILE.items()):
         installed = _dsh_profile_deps(profile)
-        for name, _spec in entries:
+        for name, _specs in entries:
             if name not in installed:
                 print(f"  skip   : {name} (profile={profile} 未装)")
                 continue

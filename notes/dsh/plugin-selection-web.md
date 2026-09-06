@@ -11,8 +11,8 @@
 |---|---|---|---|
 | `dshmarket` | `dshmarket`（npm） | [dsh-market/dsh-market](https://github.com/dsh-market/dsh-market) | 设置页内的社区插件市场：浏览/搜索/一键装/更新/备份（app 本体） |
 | `dsh-whale-widget` | `dsh-whale-widget`（npm） | [MeteorNOX/DeepSeek-Balance-Whale-Widget](https://github.com/MeteorNOX/DeepSeek-Balance-Whale-Widget) | DSH Web 右下角余额/今日已用小鲸鱼挂件（UI 向） |
-| `graph-memory` | `github:adoresever/graph-memory` | [adoresever/graph-memory](https://github.com/adoresever/graph-memory) | 知识图谱记忆：接管模型可见历史、跨会话图+向量召回 |
-| `dsh-calculator` | `github:bobcat848/dsh-calculator` | [bobcat848/dsh-calculator](https://github.com/bobcat848/dsh-calculator) | 右上角费用（会话/今日）+ 余额卡片（费用向） |
+| `graph-memory` | `github:adoresever/graph-memory`（备选 codeload tarball） | [adoresever/graph-memory](https://github.com/adoresever/graph-memory) | 知识图谱记忆：接管模型可见历史、跨会话图+向量召回 |
+| `dsh-calculator` | `github:bobcat848/dsh-calculator`（备选 codeload tarball） | [bobcat848/dsh-calculator](https://github.com/bobcat848/dsh-calculator) | 右上角费用（会话/今日）+ 余额卡片（费用向） |
 
 > 注意「dsh-calculator」消歧：市场条目 = bobcat848/dsh-calculator（无 npm 发布）。npm 同名
 > `dsh-calculator@0.0.1` 是他人占位空壳（无 dsh.bundle），非本清单对象；`dsh-plugin-calculator`
@@ -33,16 +33,29 @@
   国内镜像可用（`mirrors.cloud.tencent.com/npm` 命中）、安装快、更新检查直接 `pnpm view`。
 - **github spec**（graph-memory、calculator）：dsh 支持未发 npm / 无 npm 发布。仓库必须自带
   构建产物（dist/ 或 lib/）或 prepare 脚本，否则 plugin tree 崩溃（官方 discussion #3154）。
-  两仓库均自带产物 → `dsh plugin … add github:…` 直装可行（本机已验 `git ls-remote` 可达）。
+  两仓库均自带产物；install.py 候选源 = `github:` clone，失败自动退 codeload tarball
+  （两种传输 2026-09 均已在隔离 profile 实装验证，reconcile 后声明名入 bundles）。
 - 升级语义（install.py 统一处理）：registry → `dsh plugin … update --latest <名>`；
   github → `dsh plugin … update <名>`（pnpm 重解析分支 HEAD）。已装重跑默认只**报告**
   新版本（registry 对比 / GitHub HEAD 对比），`--update` 才执行升级。
 
 ## 四、注意事项 / 运维
 
-- **allowBuilds**：graph-memory 依赖含原生模块 `@photostructure/sqlite`（install 脚本）。
-  pnpm(≥10) 默认阻断 → 首次 add 失败时按 dsh 报错提示把 exact key 加入
-  `~/.dsh/profiles/web/pnpm-workspace.yaml` 的 `allowBuilds` 再重跑 install.py。
+- **真实安装前置（一次，dsh-calculator 必需）**：web profile 的
+  `~/.dsh/profiles/web/pnpm-workspace.yaml` 若为 `autoInstallPeers: true`，装 dsh-calculator
+  会失败——它声明 peer `@deepseek-ai/dsh-client-runtime` / `dsh-client-ui-slots@^0.0.1`，
+  而 npm 只有 `0.0.1-rc.1` 预发布、正式 0.0.x 不存在 → pnpm 自动装 peer 时报
+  `ERR_PNPM_NO_MATCHING_VERSION`（与传输无关，本机 scratch 已实证）。改成
+  `autoInstallPeers: false`（**dsh initProfile 默认值**；host 内核 peer 经
+  `profiles/node_modules` 闭包解析，不需要 auto-install）即可，graph-memory/whale/market
+  不受影响。install.py 检测到此类失败会打印该提示。
+- **传输与回退（2026-09 实测）**：`github:` spec 走 git https clone，github 偶发不可达
+  （RPC/connect 超时）→ install.py 自动退到 `codeload.github.com` tarball（pnpm 自带 fetch，
+  不经 git，更稳；graph-memory/calculator 均已按两种传输在隔离 profile 实装成功并完成
+  bundles reconcile）。保持 https，**勿**按 dsh 报错建议改用 SSH insteadOf。
+- **graph-memory 无原生依赖**：仓库 main（1.6.0-beta.x，dsh 版）依赖仅 `@sinclair/typebox`；
+  早期 npm 1.5.8（OpenClaw 版）才带 `@photostructure/sqlite`。故装 main 不需要 allowBuilds
+  放行（若未来上游调整再按 install.py 提示处理）。
 - **profile 忙**：web 是正运行 GUI 的 profile；真实 add/remove/update 建议 profile 空闲时做，
   装完**重启 dsh web**（client 侧新包需 F5/重启才注入）。install.py 默认只报告、--update 显式
   升级，正为避免静默改动运行中 profile。
