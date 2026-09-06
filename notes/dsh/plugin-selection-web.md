@@ -41,21 +41,21 @@
 
 ## 四、注意事项 / 运维
 
-- **真实安装前置（一次，dsh-calculator 必需）**：web profile 的
-  `~/.dsh/profiles/web/pnpm-workspace.yaml` 若为 `autoInstallPeers: true`，装 dsh-calculator
-  会失败——它声明 peer `@deepseek-ai/dsh-client-runtime` / `dsh-client-ui-slots@^0.0.1`，
-  而 npm 只有 `0.0.1-rc.1` 预发布、正式 0.0.x 不存在 → pnpm 自动装 peer 时报
-  `ERR_PNPM_NO_MATCHING_VERSION`（与传输无关，本机 scratch 已实证）。改成
-  `autoInstallPeers: false`（**dsh initProfile 默认值**；host 内核 peer 经
-  `profiles/node_modules` 闭包解析，不需要 auto-install）即可，graph-memory/whale/market
-  不受影响。install.py 检测到此类失败会打印该提示。
+- **全自动自愈（install.py 已实现，无需手工编辑）**：本清单插件均已评估、接受相应风险，
+  安装失败时 install.py 自动处理——① peer 自动安装无正式版（dsh-calculator 的
+  `@deepseek-ai/dsh-client-runtime` / `dsh-client-ui-slots@^0.0.1` 只有 `0.0.1-rc.1`，
+  pnpm `autoInstallPeers: true` 时会整次 `ERR_PNPM_NO_MATCHING_VERSION`）→ 自动把 profile
+  pnpm-workspace.yaml 的 `autoInstallPeers` 置 `false`（**dsh initProfile 默认值**；host 内核
+  peer 经 `profiles/node_modules` 闭包解析，不需要 auto-install）后重试；② 构建脚本被阻断 →
+  自动把 pnpm 报出的包名加入 `allowBuilds` 后重试；③ GitHub 网络抖动 → 换备选源并多轮自动
+  重试。改的是行级文本、保留注释，均幂等。
 - **传输与回退（2026-09 实测）**：`github:` spec 走 git https clone，github 偶发不可达
-  （RPC/connect 超时）→ install.py 自动退到 `codeload.github.com` tarball（pnpm 自带 fetch，
-  不经 git，更稳；graph-memory/calculator 均已按两种传输在隔离 profile 实装成功并完成
+  （RPC/connect/undici 超时）→ install.py 自动退到 `codeload.github.com` tarball（pnpm 自带
+  fetch，不经 git，更稳；graph-memory/calculator 均已按两种传输在隔离 profile 实装成功并完成
   bundles reconcile）。保持 https，**勿**按 dsh 报错建议改用 SSH insteadOf。
 - **graph-memory 无原生依赖**：仓库 main（1.6.0-beta.x，dsh 版）依赖仅 `@sinclair/typebox`；
-  早期 npm 1.5.8（OpenClaw 版）才带 `@photostructure/sqlite`。故装 main 不需要 allowBuilds
-  放行（若未来上游调整再按 install.py 提示处理）。
+  早期 npm 1.5.8（OpenClaw 版）才带 `@photostructure/sqlite`。故装 main 通常不触发 allowBuilds
+  （若未来上游调整，install.py 的②会自动放行）。
 - **profile 忙**：web 是正运行 GUI 的 profile；真实 add/remove/update 建议 profile 空闲时做，
   装完**重启 dsh web**（client 侧新包需 F5/重启才注入）。install.py 默认只报告、--update 显式
   升级，正为避免静默改动运行中 profile。

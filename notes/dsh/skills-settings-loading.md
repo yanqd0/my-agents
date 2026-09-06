@@ -91,12 +91,14 @@ dsh 的「插件」是 cordis/npm 包，靠 profile 装配生效，与 skills（
   - `dsh plugin` 会改写**真实 profile**（package.json/pnpm-lock/node_modules），并在 profile
     缺失时自动 init（副作用）。目标若是正运行的 GUI profile（web），建议该 profile 非活跃时
     执行；不在 profile 目录内并行 pnpm。
-  - **peer 自动安装陷阱**：profile workspace `autoInstallPeers: true` 时，peer 范围对不上
-    registry 正式版（如 `@deepseek-ai/dsh-*@^0.0.1`，npm 只有 rc）会整次 add 失败
-    （`ERR_PNPM_NO_MATCHING_VERSION`，与传输无关）→ 改 `autoInstallPeers: false`
-    （dsh initProfile 默认值）后重跑；install.py 会检测并提示。
-  - 原生/安装脚本模块需在 profile `pnpm-workspace.yaml` 的 `allowBuilds` 放行（install.py
-    失败时提示引导）；git/`link:` 相对 spec 由候选源机制处理（见 plugin-selection-web.md）。
+  - **peer 自动安装陷阱（自动处理）**：profile workspace `autoInstallPeers: true` 时，peer
+    范围对不上 registry 正式版（如 `@deepseek-ai/dsh-*@^0.0.1`，npm 只有 rc）会整次 add 失败
+    （`ERR_PNPM_NO_MATCHING_VERSION`，与传输无关）→ install.py 自动把该键置 `false`
+    （dsh initProfile 默认值）后重试。
+  - 原生/安装脚本模块被 pnpm 阻断 → install.py 自动把 pnpm 报出的包名加入 profile
+    `pnpm-workspace.yaml` 的 `allowBuilds` 后重试（插件均先经清单评估）；GitHub 网络抖动
+    （git/codeload 超时）→ 换备选源并多轮自动重试。git/`link:` 相对 spec 由候选源机制
+    处理（见 plugin-selection-web.md）。
   - **配置型（非 bundle）插件**与 system-prompt section（如 plan-mode 文本）不属本框架，走
     overlay `--patch`（见 issue #36，未实现）。
 - **web 现状先例**：`~/.dsh/profiles/web/package.json` 以 `link:` 引入本地

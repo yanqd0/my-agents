@@ -15,10 +15,13 @@ For each host this project provides several kinds of installable content:
   - plugins (dsh): 按 DSH_PLUGINS_BY_PROFILE 把插件装进指定 dsh profile，经
               `dsh plugin --profile <p> add/remove` 安装/卸载。**安装源按序候选**：
               优先 npm registry 名，其次 `github:`（git 走 https clone），git 不通时
-              自动退到 codeload https tarball。已装项在每次重跑时做**更新检查**
-              （npm registry 版本对比 / GitHub HEAD 版本对比），发现新版本默认仅报告，
-              加 `--update` 才实际升级（registry 走 `pnpm update --latest`、git/tarball
-              走 `pnpm update`）。故重跑幂等且可检更新、网络不稳时有备选源。
+              自动退到 codeload https tarball。**失败全自动自愈**：peer 自动安装无正式版
+              （ERR_PNPM_NO_MATCHING_VERSION）→ 自动把 profile pnpm-workspace.yaml 的
+              autoInstallPeers 置 false 后重试；构建脚本被阻断 → 自动把 pnpm 报出的包名
+              加入 allowBuilds 后重试；GitHub 网络抖动 → 多轮自动重试（幂等）。
+              已装项重跑做**更新检查**（npm registry / GitHub HEAD 对比），默认只报告、
+              加 `--update` 才升级（registry `pnpm update --latest`、git/tarball
+              `pnpm update`）。
   - extensions (pi): T1 必要官方 example <不本仓库收编>，改由 <tools/pi-examples.sh> 定位
               **已装 pi 包**自带的 examples/extensions，将白名单条目软链到
               ~/.pi/agent/extensions/。扩展含完整系统权限 → 分发需确认/--yes；升级 pi 后
@@ -38,6 +41,7 @@ import re
 import shutil
 import subprocess
 import sys
+import time
 import urllib.request
 from pathlib import Path
 
@@ -99,11 +103,13 @@ HOSTS = {
 #     dsh 支持只在仓库 main（1.6.0-beta.x）；dsh-calculator 无 npm 发布。
 # 更新语义：registry 首选 spec → pnpm view 对比最新；github/codeload → GitHub HEAD
 # package.json 版本对比。重复执行 install.py 只报告；`--update` 才升级。
-# 注意：dsh-calculator 的 peer（@deepseek-ai/dsh-*@^0.0.1）无对应正式版——profile workspace
-# 若 autoInstallPeers:true 会整次 add 失败（ERR_PNPM_NO_MATCHING_VERSION），需改为 false
-# （dsh initProfile 默认值；host 内核 peer 经 profiles/node_modules 闭包解析）；若上游依赖
-# 含原生/安装脚本模块，需在 profile pnpm-workspace.yaml 的 allowBuilds 放行后重跑。目标若
-# 是正运行的 GUI profile（web），建议非活跃时执行。失败时 install.py 会打印精确修复提示。
+# 全自动自愈（清单插件均已评估，可接受相应风险）：安装失败时 install.py 会——
+#   1) peer 自动安装无正式版（ERR_PNPM_NO_MATCHING_VERSION，如 dsh-calculator 的
+#      @deepseek-ai/dsh-*@^0.0.1）→ 自动把 profile pnpm-workspace.yaml 的
+#      autoInstallPeers 置 false（dsh initProfile 默认值）后重试；
+#   2) 构建脚本被阻断 → 自动把 pnpm 报出的包名加入 allowBuilds 后重试；
+#   3) GitHub 网络抖动（git/codeload 超时）→ 换备选源并多轮自动重试（幂等）。
+# 目标若是正运行的 GUI profile（web），建议非活跃时执行。
 DSH_PLUGINS_BY_PROFILE = {
     "web": [
         # dsh-market/dsh-market：设置内插件市场（浏览/一键装/更新/备份）
@@ -513,51 +519,173 @@ def _run_dsh_plugin(profile: str, args: list, dry_run: bool) -> tuple:
     if proc.stdout:
         print("  " + proc.stdout.strip().replace("\n", "\n  "))
     if proc.returncode != 0:
+        # pnpm 的详细报错（ERR_PNPM_* 等）走 dsh 的 stdout，dsh 自己的小结走 stderr
+        # → 分类/修复依据合并文本，展示仍分开。
         err = proc.stderr or ""
-        print(f"  error : {label} 退出码 {proc.returncode}: {err.strip()}")
-        return False, err
+        out = proc.stdout or ""
+        combined = (err + ("\n" if err and out else "") + out).strip()
+        print(f"  error : {label} 退出码 {proc.returncode}: "
+              f"{(err.strip() if err.strip() else out.strip())}")
+        return False, combined
     return True, ""
 
 
-def _plugin_install_hint(profile: str, name: str, err: str) -> None:
-    """把 add 失败按根因分类给出可执行提示（peer 自动安装 / 构建脚本 / 网络）。"""
-    ws = _dsh_home() / "profiles" / profile / "pnpm-workspace.yaml"
-    if "ERR_PNPM_NO_MATCHING_VERSION" in err or "autoInstallPeers" in err or "peer" in err:
-        print(f"  hint   : {name} 被 peer 自动安装卡住（如 No matching version for "
-              f"@deepseek-ai/dsh-*@^0.0.1）。把 {ws} 的 autoInstallPeers 改为 false"
-              "（dsh initProfile 默认即 false；host 内核 peer 经 profiles/node_modules"
-              " 闭包解析，无需 auto-install），再重跑本命令。")
-    if "Ignored build scripts" in err or "allowBuilds" in err or "ERR_PNPM_RECURSIVE" in err:
-        print(f"  hint   : {name} 的依赖含原生/安装脚本被 pnpm 阻断——把上面 pnpm 打印的"
-              f" exact key 加入 {ws} 的 allowBuilds 后重跑。")
-    if "ERR_PNPM_GIT_RESOLVE_FAILED" in err or "Couldn't connect" in err or "RPC failed" in err:
-        print(f"  hint   : {name} 的 GitHub 通道不可达（多为临时网络抖动）。本清单已带"
-              " codeload https 备选源会自动重试；仍失败可稍后重跑 install.py（幂等）。"
-              " 保持 https，勿按 dsh 报错建议改用 SSH insteadOf。")
+# github 源在部分网络下间歇超时（github.com / codeload 均可能）：
+# 候选源一轮尝试失败后，自动多轮重试；pnpm 内部另有自己的重试。
+INSTALL_ATTEMPTS = 3
+INSTALL_RETRY_SLEEP = 6
+
+
+def _profile_workspace(profile: str) -> Path:
+    """该 profile 的 pnpm-workspace.yaml（pnpm ≥10 策略配置所在）。"""
+    return _dsh_home() / "profiles" / profile / "pnpm-workspace.yaml"
+
+
+def _ensure_auto_install_peers_off(profile: str, dry_run: bool) -> bool:
+    """把 profile pnpm-workspace.yaml 的 `autoInstallPeers: true` 改为 false（幂等）。
+
+    为何自动改：dsh initProfile 默认即 false——社区插件应经 profiles/node_modules 闭包
+    解析 host 内核 peer，pnpm 无需去 registry 自动安装。后者在 peer 范围只有 rc/无正式版
+    （如 dsh-calculator 的 @deepseek-ai/dsh-*@^0.0.1）时会让整次 add 失败
+    （ERR_PNPM_NO_MATCHING_VERSION）。按行精确改写、保留其余内容与注释。"""
+    ws = _profile_workspace(profile)
+    try:
+        text = ws.read_text()
+    except OSError:
+        return False
+    out = []
+    changed = False
+    for ln in text.splitlines():
+        m = re.match(r"^(\s*autoInstallPeers\s*:\s*)(?:true|yes|on)(\s*(?:#.*)?)$", ln)
+        if m:
+            out.append(f"{m.group(1)}false{m.group(2)}")
+            changed = True
+        else:
+            out.append(ln)
+    if not changed:
+        return False
+    print(f"{'[dry]  ' if dry_run else '  fix    : '}profile {profile}: autoInstallPeers true -> false "
+          f"({ws})")
+    if not dry_run:
+        ws.write_text("\n".join(out) + ("\n" if text.endswith("\n") else ""))
+    return True
+
+
+def _ensure_allow_builds(profile: str, keys: list, dry_run: bool) -> bool:
+    """把缺失的包名加入 profile pnpm-workspace.yaml 的 allowBuilds 块（幂等）。
+
+    放行构建脚本即允许该包在安装时执行自身脚本（用户已对清单插件评估认可该风险）。"""
+    ws = _profile_workspace(profile)
+    try:
+        lines = ws.read_text().splitlines()
+    except OSError:
+        return False
+    idx = next((i for i, ln in enumerate(lines) if re.match(r"^allowBuilds\s*:\s*$", ln)), None)
+    if idx is None:
+        new_block = ["allowBuilds:"]
+        indent = "  "
+        insert_at = len(lines)
+    else:
+        new_block = []
+        indent = "  "
+        # 块内已有条目用其缩进；扫描到下一个顶格 key 为止
+        j = idx + 1
+        while j < len(lines) and (lines[j].startswith(("  ", "\t")) or not lines[j].strip()):
+            if lines[j].strip() and not lines[j].strip().startswith("#"):
+                m = re.match(r"^(\s*)'([^']+)':", lines[j])
+                if m:
+                    indent = m.group(1)
+            j += 1
+        insert_at = idx + 1
+    existing = set()
+    for ln in lines:
+        m = re.match(r"^\s*'([^']+)':\s*true", ln)
+        if m:
+            existing.add(m.group(1))
+    missing = [k for k in keys if k not in existing]
+    if not missing:
+        return False
+    new_block += [f"{indent}'{k}': true" for k in missing]
+    new_lines = lines[:insert_at] + new_block + lines[insert_at:]
+    print(f"{'[dry]  ' if dry_run else '  fix    : '}profile {profile}: allowBuilds += "
+          f"{missing} ({ws})")
+    if not dry_run:
+        ws.write_text("\n".join(new_lines) + "\n")
+    return True
+
+
+def _parse_blocked_builds(err: str) -> list:
+    """从 pnpm 报错提取被阻断的包名（Ignored build scripts: 'a', 'b'.）。"""
+    m = re.search(r"Ignored build scripts:\s*((?:'[^']*'\s*(?:,\s*)?)+)", err)
+    return re.findall(r"'([^']*)'", m.group(1)) if m else []
+
+
+def _classify_dsh_err(err: str) -> str:
+    """peer|build|network|unknown——只认 pnpm 自身标记，忽略 dsh 追加的通用文案
+
+    （dsh CLI 对任意 git spec 失败都会追加 "…under allowBuilds…" 提示，不能据此判定）。"""
+    if any(k in err for k in ("ERR_PNPM_NO_MATCHING_VERSION", "ERR_PNPM_PEER_DEP_MISSING")):
+        return "peer"
+    if any(k in err for k in ("Ignored build scripts", "approve-builds",
+                              "ERR_PNPM_RECURSIVE_BUILD_SCRIPTS", "onlyBuiltDependencies")):
+        return "build"
+    low = err.lower()
+    if any(k in low for k in ("timeouterror", "connect timeout", "und_err_connect",
+                              "rpc failed", "couldn't connect", "git_resolve_failed",
+                              "socket hang up", "fetch failed", "error (23)",
+                              "econnreset", "etimedout", "eai_again", "getaddrinfo",
+                              "operation was aborted")):
+        return "network"
+    return "unknown"
 
 
 def _install_dsh_plugin(profile: str, name: str, specs: list, dry_run: bool) -> None:
-    """按候选源顺序 add，成功即停（npm → github https clone → codeload tarball）。
+    """全自动安装一个插件：候选源按序 + 多轮重试 + 配置问题自动修复。
 
-    peer/构建脚本类失败与传输无关 → 提示配置修复后直接停，不再换源重试；仅网络类
-    失败才继续尝试下一个候选源。"""
-    for i, spec in enumerate(specs):
-        ok, err = _run_dsh_plugin(profile, ["add", spec], dry_run)
-        if ok:
-            return
-        if _plugin_error_is_config(err):
-            _plugin_install_hint(profile, name, err)
-            return
-        if i < len(specs) - 1:
-            print(f"  warn   : {name} 经 {spec} 安装失败，尝试备选源 …")
-            continue
-        _plugin_install_hint(profile, name, err)
-
-
-def _plugin_error_is_config(err: str) -> bool:
-    """peer 自动安装 / 构建脚本阻断属本地配置问题，换源无用。"""
-    return any(k in err for k in ("ERR_PNPM_NO_MATCHING_VERSION", "autoInstallPeers",
-                                  "Ignored build scripts", "allowBuilds"))
+    流程：对每轮依次尝试 specs（npm → github clone → codeload tarball）。
+      - peer 类失败 → 自动改 autoInstallPeers:false → 下一轮重试；
+      - build 类失败 → 自动把 pnpm 报出的包名加入 allowBuilds → 下一轮重试；
+      - network 类失败 → 换备选源；候选耗尽则整轮重试（最多 INSTALL_ATTEMPTS 轮）。
+    """
+    last_kind = "unknown"
+    for attempt in range(1, INSTALL_ATTEMPTS + 1):
+        for spec in specs:
+            ok, err = _run_dsh_plugin(profile, ["add", spec], dry_run)
+            if ok:
+                return
+            kind = _classify_dsh_err(err)
+            last_kind = kind
+            if kind == "peer":
+                if not dry_run:
+                    _ensure_auto_install_peers_off(profile, dry_run)
+                print(f"  fix    : {name} peer 配置已自动修复（autoInstallPeers → false），重试 …")
+                break
+            if kind == "build":
+                keys = _parse_blocked_builds(err)
+                if keys:
+                    if not dry_run:
+                        _ensure_allow_builds(profile, keys, dry_run)
+                    print(f"  fix    : {name} 构建脚本已自动放行（allowBuilds += {keys}），重试 …")
+                else:
+                    print(f"  warn   : {name} 构建脚本被阻断但无法从报错解析包名，见上方输出")
+                break
+            if spec is not specs[-1]:
+                print(f"  warn   : {name} 经 {spec} 安装失败（{kind}），尝试备选源 …")
+        if attempt < INSTALL_ATTEMPTS:
+            print(f"  retry  : {name} 第 {attempt}/{INSTALL_ATTEMPTS} 轮未成功（{last_kind}），"
+                  f"{INSTALL_RETRY_SLEEP}s 后自动重试")
+            if not dry_run:
+                time.sleep(INSTALL_RETRY_SLEEP)
+    if last_kind == "network":
+        print(f"  error  : {name} 重试 {INSTALL_ATTEMPTS} 轮仍连不上 GitHub（git/codeload 均"
+              "超时）。网络恢复后重跑 install.py 即可（幂等）；必要时先设 https_proxy。"
+              "保持 https，勿按 dsh 报错建议改 SSH。")
+    elif last_kind == "peer":
+        print(f"  error  : {name} 自动修复 autoInstallPeers 后仍失败，见上方输出")
+    elif last_kind == "build":
+        print(f"  error  : {name} 自动放行 allowBuilds 后仍失败，见上方输出")
+    else:
+        print(f"  error  : {name} 安装失败（{last_kind}），见上方输出；重跑 install.py 会继续尝试")
 
 
 def _dsh_plugin_available(profile: str, name: str, specs: list) -> str | None:
@@ -592,6 +720,9 @@ def _dsh_plugins(dry_run: bool, update: bool) -> int:
         return 0
     outdated = 0
     for profile, entries in sorted(DSH_PLUGINS_BY_PROFILE.items()):
+        # 预检：把 autoInstallPeers:true 置 false（dsh initProfile 默认），从根上避免
+        # peer 自动安装陷阱（dsh-calculator 的 @deepseek-ai/dsh-*@^0.0.1 无正式版）。
+        _ensure_auto_install_peers_off(profile, dry_run)
         installed = _dsh_profile_deps(profile)
         for name, specs in entries:
             if name not in installed:
