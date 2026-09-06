@@ -133,6 +133,27 @@ def _verify_nested_links(src_dir: Path) -> int:
     return broken
 
 
+def _audit_dedup(src_dir: Path) -> int:
+    """去重守卫：skills 源内实体文件若与 submodule 对应文件字节一致，本应软链而非实体副本。
+
+    防止共享文件被改成实体副本后静默分叉（打破去重/单源）。返回冗余实体副本数。
+    """
+    redun = 0
+    sub = repo_root() / "vendor" / "my-claude" / "skills"
+    for dp, dn, fn in os.walk(src_dir):
+        dn[:] = [d for d in dn if d != ".git"]
+        for f in fn:
+            p = Path(dp) / f
+            if p.is_symlink():
+                continue
+            relp = p.relative_to(src_dir)
+            vfile = sub / relp
+            if vfile.is_file() and p.read_bytes() == vfile.read_bytes():
+                print(f"  warn   : {p.relative_to(repo_root())} 与上游一致，建议改软链去重")
+                redun += 1
+    return redun
+
+
 # ── settings（deep-merge） ───────────────────────────────────────────────
 def _deep_merge(base: dict, overlay: dict, force: bool = False) -> None:
     """把 overlay 合入 base。标量仅当 base 缺失才写入，除非 force。"""
@@ -328,6 +349,7 @@ def install(host: dict, dry_run: bool, force: bool, assume_yes: bool) -> None:
     print("- skills:")
     _symlink_items(root / host["skills_src"], host["skills_dest"], dry_run)
     _verify_nested_links(root / host["skills_src"])
+    _audit_dedup(root / host["skills_src"])
     print("- settings:")
     _install_settings(root / host["settings_src"], host["settings_dest"], force, dry_run)
     print("- models:")
