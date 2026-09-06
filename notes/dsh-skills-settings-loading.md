@@ -1,9 +1,8 @@
 # dsh skills / settings 加载机制（0.2.0 调研）
 
-> 承接 issue #8：在 my-agents 支持 `--target dsh` 前，摸清 dsh 读 skills/settings 的
-> 方式，结论落地 `install.py` 的 dsh 宿主布局。调研对象为运行中的 `dsh web`
-> （`@deepseek-ai/dsh` 0.1.1-rc.2，profile=web），宿主定位依据 dsh-mint skill 的
-> `references/agent/dsh.md`。
+> 承接 issue #8（skills/settings 加载）+ #34/#35（dsh 插件管理契约与框架）。调研对象为
+> 运行中的 `dsh web`（`@deepseek-ai/dsh` 0.1.1-rc.2，profile=web），宿主定位依据 dsh-mint
+> skill 的 `references/agent/dsh.md`。
 
 ## 结论速览
 
@@ -68,7 +67,33 @@
 - settings/models：dsh 置空（None）。若日后确需写 dsh 默认模型路由，作为独立需求单列，
   且以「写/不覆盖其它 namespace」的 YAML 语义实现（非 JSON 深合并），默认 dry-run 提示。
 
-## 四、与 pi 差异对照
+## 四、dsh 插件管理契约（#34/#35；install.py `DSH_PLUGINS_BY_PROFILE`）
+
+dsh 的「插件」是 cordis/npm 包，靠 profile 装配生效，与 skills（内容文件）本质不同，故用
+独立的声明 + 官方封装安装，而不是软链/merge。
+
+- **机制**：`dsh plugin --profile <p> <pnpm add|remove <pkg>>`——缺 profile 时自动按模板
+  init（web/headless 有内置模板；自定义名 init 为 `[dsh-base]`），转发 pnpm，成功后把声明
+  `dsh.bundle` 的依赖**自动并入**该 profile `dsh.profile.bundles`；`remove` 则移出。纯库
+  （无 `dsh.bundle`）只作依赖、告警不入层。
+- **单一真源（目前为空，仅框架）**：install.py 的 `DSH_PLUGINS_BY_PROFILE`（dict：
+  `profile -> [bare npm 包名…]`，key 任意，如 web/headless/tui/自定义名）。沿先例
+  `PI_T1_EXTENSIONS` 放代码常量；空清单不落地，有真实插件再补。
+- **幂等 / 回滚**：add 前读该 profile `package.json.dependencies`，已在 → skip；revert =
+  `remove`（不在则 skip）。缺 `dsh`/`pnpm` 在 PATH → 告警跳过。
+- **注意事项**：
+  - `dsh plugin` 会改写**真实 profile**（package.json/pnpm-lock/node_modules），并在 profile
+    缺失时自动 init（副作用）。目标若是正运行的 GUI profile（web），建议该 profile 非活跃时
+    执行；不在 profile 目录内并行 pnpm。
+  - 原生/安装脚本模块需在 profile `pnpm-workspace.yaml` 的 `allowBuilds` 放行（失败提示引导）；
+    git/`link:` 相对 spec 的进阶内容暂不实现（框架注释留口）。
+  - **配置型（非 bundle）插件**与 system-prompt section（如 plan-mode 文本）不属本框架，走
+    overlay `--patch`（见 issue #36，未实现）。
+- **web 现状先例**：`~/.dsh/profiles/web/package.json` 以 `link:` 引入本地
+  `@yanqd0/dsh-mint`（自身未声明 `dsh.bundle` → 需另经 `cordis.patch.yml` 挂 entry）。本
+  项目不管理 dsh-mint（属其自身仓库），仅作本地 `link:` 插件先例参考。
+
+## 五、与 pi 差异对照
 
 | 项 | pi | dsh |
 |---|---|---|
@@ -77,7 +102,7 @@
 | 模型/cost 文件 | `~/.pi/agent/models.json`（含 cost） | 无（provider 插件管理） |
 | extensions 自动发现 | 官方 examples 软链进 `~/.pi/agent/extensions` | 无对应（skill 即扩展；插件走 profile） |
 
-## 五、未决 / 待确认
+## 六、未决 / 待确认
 
 - `~/.dsh/skills`（rank 400）与本项目 `~/.agents/skills`（rank 500）并存时 dsh 的取用排序：
   rank 500 更外层，理论上 user-dsh(400) 优先；实际当前 `~/.dsh/skills` 为空，未实测冲突。
