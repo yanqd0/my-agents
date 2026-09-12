@@ -29,9 +29,9 @@
 | 文件 | 内容 | 说明 |
 |------|------|------|
 | `default.json` | `quietStartup`、`enableInstallTelemetry:false`、`enableAnalytics:false` | 安静启动 + 关遥测/分析 |
-| `startup.json` | `defaultProvider:deepseek`、`defaultModel:deepseek-v4-flash`、`defaultThinkingLevel:low` | 启动模型默认（当前仅 deepseek） |
+| `startup.json` | `defaultProvider:deepseek`、`defaultModel:deepseek-flash`、`defaultThinkingLevel:low` | 启动模型默认（当前仅 deepseek） |
 | `compaction.json` | `compaction.enabled`、`reserveTokens:100000`、`keepRecentTokens:25000` | 1M 窗口留 100K 输出 → 约 900K 触发压缩；保留近期 25K |
-| `model/deepseek.json` | deepseek-v4-pro/flash 定义 + RMB cost（元/百万 tokens） | → models.json；价格/来源见 `model/AGENTS.md` |
+| `model/deepseek.json` | deepseek-v4-pro / deepseek-flash 定义 + RMB cost（元/百万 tokens） | → models.json；价格/来源见 `model/AGENTS.md` |
 
 ## 与现状文档的对应（改动必同步）
 

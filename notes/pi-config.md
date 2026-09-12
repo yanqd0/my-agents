@@ -28,7 +28,7 @@ deep-merge 落地。**路径上下文**：settings.json 里相对路径以 `~/.p
 - deep-merge 默认**不覆盖**用户已有的标量键 → 本地 `apiKey` 等安全。需覆盖才 `--force`。
 - 隐私/体验类默认会**显式关闭**（见 §2），其余一律**跟随 pi 默认**（最小配置，见 §3）。
 
-## 2. 当前已生效配置（现状 2026-09-05）
+## 2. 当前已生效配置（现状 2026-09-14）
 
 ### 2.1 settings.json 已生效键
 
@@ -38,7 +38,7 @@ deep-merge 落地。**路径上下文**：settings.json 里相对路径以 `~/.p
 | `enableInstallTelemetry` | `false` | `true` | `default.json` | 关匿名安装/更新 ping + provider 归属头 |
 | `enableAnalytics` | `false` | `false` | `default.json` | 显式关分析（与默认同，明确表态） |
 | `defaultProvider` | `deepseek` | — | `startup.json` | 启动 provider |
-| `defaultModel` | `deepseek-v4-flash` | — | `startup.json` | 启动模型（当前仅 deepseek） |
+| `defaultModel` | `deepseek-flash` | — | `startup.json` | 启动模型（当前仅 deepseek；V4.1-Flash） |
 | `defaultThinkingLevel` | `low` | — | `startup.json` | 启动思考级别 |
 | `compaction.enabled` | `true` | `true` | `compaction.json` | 开自动压缩 |
 | `compaction.reserveTokens` | `100000` | `16384` | `compaction.json` | 1M 窗口留 100K 给 LLM 输出 |
@@ -57,7 +57,7 @@ provider **deepseek**（`settings/pi/model/deepseek.json`）：
 | `baseUrl` | `https://api.deepseek.com` |
 | `api` | `openai-completions` |
 | `apiKey` | 本地**手动补**（片段不含；deep-merge 不覆盖，安全） |
-| 模型 | `deepseek-v4-pro`、`deepseek-v4-flash`，各含 `contextWindow:1000000`、`maxTokens:384000`、`input:["text"]`、`reasoning:true`、`cost`（元/百万 tokens，空闲档）、`compat`（`requiresReasoningContentOnAssistantMessages`、`thinkingFormat:"deepseek"`、`reasoningEffortMap`） |
+| 模型 | `deepseek-v4-pro`（`input:["text"]`）、`deepseek-flash`（V4.1-Flash，`input:["text","image"]`），各含 `contextWindow:1000000`、`maxTokens:384000`、`reasoning:true`、`cost`（元/百万 tokens，空闲档）、`compat`（`requiresReasoningContentOnAssistantMessages`、`thinkingFormat:"deepseek"`、`reasoningEffortMap`） |
 
 价格源见 `settings/pi/model/AGENTS.md`（DeepSeek 官方按百万 tokens、命中/未命中/输出 +
 空闲/高峰两档；直接录**空闲档人民币原值**，不做 USD 折算——pi 的 `cost` 为无币种数值，
