@@ -1,13 +1,13 @@
 ---
 name: my-image-vision
 description: >-
-  图片识图与预处理：对图片进行压缩/剪裁/灰度/模糊等预处理后，调用 DeepSeek V4 Vision API
+  图片识图与预处理：对图片进行压缩/剪裁/灰度/模糊等预处理后，调用 DeepSeek V4.1 Vision API
   返回文本描述。当用户说"看这张图/分析截图/图片里有什么/识别这张图/OCR/描述图片内容"
   等识图意图时可自主调用；支持多重处理合并为一张图后一次识别。
 allowed-tools: Read Write Bash question
 ---
 
-对用户指定的图片进行预处理（可选），然后调用 DeepSeek V4 Vision API 返回文本描述。
+对用户指定的图片进行预处理（可选），然后调用 DeepSeek V4.1 Vision API 返回文本描述。
 需宿主已导出 `DEEPSEEK_API_KEY`。
 
 **交互约定**：需用户选择/确认处，若宿主提供反问 tool（`question`/`ask_user_question`）则用之；无交互 tool 或 headless 时退化为纯文本列出选项等用户回答。

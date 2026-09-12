@@ -3,7 +3,7 @@
 # requires-python = "~=3.12"
 # dependencies = ["pillow~=10.4", "httpx~=0.28"]
 # ///
-"""将图片发送到 DeepSeek V4 Vision API，输出文本描述。
+"""将图片发送到 DeepSeek V4.1 Vision API，输出文本描述。
 
 用法：
     ./describe.py <image_path> [--prompt "指令"] [--max-tokens 1024]
@@ -19,7 +19,7 @@ import httpx
 
 DEFAULT_PROMPT = "请详细描述这张图片的内容。"
 DEEPSEEK_VISION_URL = "https://api.deepseek.com/v1/chat/completions"
-DEEPSEEK_MODEL = "deepseek-v4-pro"
+DEEPSEEK_MODEL = "deepseek-flash"
 
 
 def _b64_image(path: str) -> tuple[str, str]:
@@ -37,7 +37,7 @@ def _b64_image(path: str) -> tuple[str, str]:
 def _call_deepseek_vision(
     image_path: str, prompt: str, token: str, max_tokens: int
 ) -> str:
-    """调 DeepSeek V4 原生 Vision API（OpenAI Chat Completions 格式）。
+    """调 DeepSeek V4.1 原生 Vision API（OpenAI Chat Completions 格式）。
     返回 choices[0].message.content；失败时 exit(1)。"""
     b64, mime = _b64_image(image_path)
     data_url = f"data:{mime};base64,{b64}"
