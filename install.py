@@ -98,36 +98,38 @@ HOSTS = {
 #     报错建议改 SSH insteadOf——保持 https）；git 不可达时自动退到
 #     `https://codeload.github.com/…/tar.gz/refs/heads/main`（pnpm 自带 fetch 下载，
 #     不经 git，国内网络通常更稳）。codeload spec 需硬编码 refs/heads/main。
-#   - 无 npm 候选 = 该插件 dsh 能力只存在 GitHub 分发（npm 名装了也不激活）：
-#     graph-memory 的 npm 全版本均无 `dsh.bundle`（仍是纯 OpenClaw 插件），
-#     dsh 支持只在仓库 main（1.6.0-beta.x）；dsh-calculator 无 npm 发布。
+#   - 无 npm 候选 = 该插件 dsh 能力只存在 GitHub 分发（npm 名装了也不激活）。当前
+#     选入清单仅剩 registry 源；已挑出的 graph-memory/dsh-calculator 均为 github
+#     分发（见下方「挑出」与 notes/dsh/plugin-selection-web.md）。
 # 更新语义：registry 首选 spec → pnpm view 对比最新；github/codeload → GitHub HEAD
 # package.json 版本对比。重复执行 install.py 只报告；`--update` 才升级。
 # 全自动自愈（清单插件均已评估，可接受相应风险）：安装失败时 install.py 会——
-#   1) peer 自动安装无正式版（ERR_PNPM_NO_MATCHING_VERSION，如 dsh-calculator 的
-#      @deepseek-ai/dsh-*@^0.0.1）→ 自动把 profile pnpm-workspace.yaml 的
-#      autoInstallPeers 置 false（dsh initProfile 默认值）后重试；
+#   1) peer 自动安装无正式版（ERR_PNPM_NO_MATCHING_VERSION，peer 范围只覆盖 rc 时）
+#      → 自动把 profile pnpm-workspace.yaml 的 autoInstallPeers 置 false 后重试；
 #   2) 构建脚本被阻断 → 自动把 pnpm 报出的包名加入 allowBuilds 后重试；
 #   3) GitHub 网络抖动（git/codeload 超时）→ 换备选源并多轮自动重试（幂等）。
 # 目标若是正运行的 GUI profile（web），建议非活跃时执行。
 DSH_PLUGINS_BY_PROFILE = {
     "web": [
+        # ── 选入：dsh 0.1.7-rc.2 实机验证可用 ──
         # dsh-market/dsh-market：设置内插件市场（浏览/一键装/更新/备份）
         ("dshmarket", ["dshmarket"]),
         # MeteorNOX/DeepSeek-Balance-Whale-Widget：余额鲸鱼挂件（npm 已发）
         ("dsh-whale-widget", ["dsh-whale-widget"]),
-        # adoresever/graph-memory：知识图谱记忆（npm 无 dsh 版 → GitHub 分发）
-        ("graph-memory", [
-            "github:adoresever/graph-memory",
-            "https://codeload.github.com/adoresever/graph-memory/tar.gz/refs/heads/main",
-        ]),
-        # bobcat848/dsh-calculator：DeepSeek 费用/余额右上角卡片（无 npm 发布）
-        ("dsh-calculator", [
-            "github:bobcat848/dsh-calculator",
-            "https://codeload.github.com/bobcat848/dsh-calculator/tar.gz/refs/heads/main",
-        ]),
     ],
 }
+
+# ── 挑出（0.1.7 暂不装；2026-09-27 复评）───────────────────────────────────
+# 选入/挑出的完整记录与恢复条件见 notes/dsh/plugin-selection-web.md「二、0.1.7 复评」。
+#   graph-memory（adoresever/graph-memory，github 分发）：
+#     1.6.0-beta.16 仍以旧式 source:{kind:"plugin"} 调 session.append，与 dsh 0.1.7
+#     的会话格式 V4 冲突——一旦触发滚动压缩/工具轨迹归档即整轮失败（报错
+#     "format v4 message requires a producer-owned source kind"；上游 issue #113，
+#     open）。待上游修复后重新评估恢复。
+#   dsh-calculator（bobcat848/dsh-calculator，github 分发）：
+#     1.4.1 声明 peer @deepseek-ai/dsh-client-runtime / @deepseek-ai/dsh-client-ui-slots
+#     @^0.0.1，被 dsh 0.1.7 兼容门禁拒绝加载（且 dsh-client-runtime 在 0.1.7 已移除）。
+#     待作者更新 peer 范围后重新评估恢复。
 
 
 def repo_root() -> Path:

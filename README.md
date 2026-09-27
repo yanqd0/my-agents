@@ -31,11 +31,12 @@
 
 dsh 的 `--target dsh` **装 skills 到 `~/.agents/skills`**（与 pi 共用；dsh 自动发现），并按
 `install.py` 中 `DSH_PLUGINS_BY_PROFILE` 的清单把 **dsh 第三方插件**经 `dsh plugin --profile web
-add` 装入 **web profile**（当前 4 个：dshmarket / dsh-whale-widget / graph-memory /
-dsh-calculator）。缺装项每次重跑自动补装（幂等），**安装源按序候选**：优先 npm registry 名，
-其次 `github:`（https clone），git 不通时自动退到 codeload https tarball（保持 https，勿改
-SSH）。**安装全程自动自愈、无需手工编辑**：peer 自动安装无正式版（dsh-calculator 的
-`@deepseek-ai/dsh-*@^0.0.1` 只有 rc）→ 自动把 `~/.dsh/profiles/web/pnpm-workspace.yaml` 的
+add` 装入 **web profile**（当前 2 个：dshmarket / dsh-whale-widget；graph-memory /
+dsh-calculator 因 dsh 0.1.7 兼容性已挑出，选入/挑出记录见
+`notes/dsh/plugin-selection-web.md`）。缺装项每次重跑自动补装（幂等），**安装源按序候选**：
+优先 npm registry 名，其次 `github:`（https clone），git 不通时自动退到 codeload https
+tarball（保持 https，勿改 SSH）。**安装全程自动自愈、无需手工编辑**：peer 自动安装无正式版
+（peer 范围只覆盖 rc 时）→ 自动把 `~/.dsh/profiles/web/pnpm-workspace.yaml` 的
 `autoInstallPeers` 置 `false`（dsh initProfile 默认值）后重试；构建脚本被阻断 → 自动加入
 `allowBuilds` 后重试；GitHub 网络抖动 → 换备选源并多轮自动重试。
 已装项重跑时做**更新检查**（registry 与 GitHub HEAD 版本对比），发现新版本默认仅报告，
